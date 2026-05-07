@@ -80,12 +80,20 @@ fi
 # 7. DNS 解析（fake-ip 测试）
 echo ""
 echo "7. DNS 解析"
-dns_result=$(python3 -c "import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.settimeout(3); s.sendto(b"\x00\x01\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x06google\x03com\x00\x00\x01\x00\x01",("127.0.0.1",1053)); r=s.recv(512); print(r[-4:].hex())" 2>/dev/null || echo "")
+dns_result=$(python3 -c '
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.settimeout(3)
+pkt = b"\x00\x01\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x06google\x03com\x00\x00\x01\x00\x01"
+s.sendto(pkt, ("127.0.0.1", 1053))
+r = s.recv(512)
+ip = ".".join(str(b) for b in r[-4:])
+print(ip)
+' 2>/dev/null || echo "")
 if [ -n "$dns_result" ]; then
     pass "DNS 解析: google.com → $dns_result"
-    # fake-ip 返回 198.18.x.x (hex: c612xxxx)
-    if echo "$dns_result" | grep -q "^c612"; then
-        pass "fake-ip 模式生效"
+    if echo "$dns_result" | grep -q "^198\\.18\\."; then
+        pass "fake-ip 模式生效 (198.18.x.x)"
     else
         warn "非 fake-ip 地址，可能使用 redir-host 模式"
     fi
