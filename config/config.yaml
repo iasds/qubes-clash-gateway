@@ -1,0 +1,98 @@
+# mihomo 配置模板 — Qubes OS 透明代理网关
+# 安装时会被 install.sh 复制到 /rw/config/clash/config.yaml
+
+# ==================== 基础 ====================
+mixed-port: 7890          # HTTP/SOCKS5 混合代理端口
+allow-lan: true           # 允许局域网（AppVM）连接
+bind-address: "*"
+mode: rule
+log-level: info
+ipv6: false               # Qubes OS 不用 IPv6
+external-controller: 127.0.0.1:9090
+
+# 出站接口 — Qubes NetVM 的上游网卡
+# auto-detect-interface 会自动选择，但可以手动指定
+# interface-name: eth0
+
+# ==================== TUN ====================
+tun:
+  enable: true
+  stack: system            # system 比 gvisor 在 Linux 网关上更稳定
+  auto-route: true         # 自动配置路由表
+  auto-redirect: true      # 自动配置 nftables/iptables 透明代理规则！
+  auto-detect-interface: true
+  dns-hijack:
+    - any:53
+    - tcp://any:53
+  strict-route: true
+  mtu: 9000
+  # 排除 Qubes 内部网络，避免影响 VM 间通信
+  route-exclude-address:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+
+# ==================== DNS ====================
+dns:
+  enable: true
+  listen: 0.0.0.0:1053
+  enhanced-mode: fake-ip   # fake-ip 避免 DNS 污染和循环
+  fake-ip-range: 198.18.0.1/16
+  # fake-ip-filter 控制哪些域名不用 fake-ip（返回真实 IP）
+  fake-ip-filter:
+    - "*.lan"
+    - "*.local"
+    - "*.localhost"
+    - "*.direct"
+    - "time.*.com"
+    - "ntp.*.com"
+    - "+.msftconnecttest.com"
+    - "+.msftncsi.com"
+  default-nameserver:      # 用于解析 nameserver 中的域名
+    - 114.114.114.114
+    - 223.5.5.5
+  nameserver:              # 国内 DNS
+    - 114.114.114.114
+    - 223.5.5.5
+  fallback:                # 国外 DNS（用域名，防代理侧 DNS 污染）
+    - https://cloudflare-dns.com/dns-query
+    - https://dns.google/dns-query
+    - tls://dns.google
+  fallback-filter:
+    geoip: true
+    geoip-code: CN
+    ipcidr:
+      - 240.0.0.0/4
+
+# ==================== 代理节点 ====================
+# 由 clashctl 或手动添加
+proxies: []
+
+proxy-groups:
+  - name: auto
+    type: url-test
+    proxies: []
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 50
+
+  - name: direct-select
+    type: select
+    proxies:
+      - DIRECT
+      - auto
+
+# ==================== 分流规则 ====================
+rules:
+  # 私有地址直连
+  - IP-CIDR,10.0.0.0/8,DIRECT
+  - IP-CIDR,172.16.0.0/12,DIRECT
+  - IP-CIDR,192.168.0.0/16,DIRECT
+  - IP-CIDR,127.0.0.0/8,DIRECT
+
+  # 国内直连
+  - GEOSITE,cn,DIRECT
+  - GEOIP,CN,DIRECT
+
+  # 兜底走代理
+  - MATCH,auto
