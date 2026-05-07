@@ -41,7 +41,7 @@ fi
 # 3. TUN 接口
 echo ""
 echo "3. TUN 接口"
-if ip link show mihomo 2>/dev/null || ip link show tun0 2>/dev/null; then
+if ip link show Meta 2>/dev/null || ip link show tun0 2>/dev/null || ip link show mihomo 2>/dev/null; then
     pass "TUN 接口存在"
 else
     warn "未检测到 TUN 接口（可能使用其他名称）"
@@ -80,16 +80,23 @@ fi
 # 7. DNS 解析（fake-ip 测试）
 echo ""
 echo "7. DNS 解析"
-dns_result=$(dig +short @127.0.0.1 -p 1053 google.com 2>/dev/null || echo "")
+dns_result=$(python3 -c "import socket; s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM); s.settimeout(3); s.sendto(b"\x00\x01\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x06google\x03com\x00\x00\x01\x00\x01",("127.0.0.1",1053)); r=s.recv(512); print(r[-4:].hex())" 2>/dev/null || echo "")
 if [ -n "$dns_result" ]; then
     pass "DNS 解析: google.com → $dns_result"
-    if echo "$dns_result" | grep -q "^198\.18\."; then
-        pass "fake-ip 模式生效 (198.18.x.x)"
+    # fake-ip 返回 198.18.x.x (hex: c612xxxx)
+    if echo "$dns_result" | grep -q "^c612"; then
+        pass "fake-ip 模式生效"
     else
         warn "非 fake-ip 地址，可能使用 redir-host 模式"
     fi
 else
-    fail "DNS 解析失败"
+    # fallback: 尝试 dig
+    dns_result=$(dig +short @127.0.0.1 -p 1053 google.com 2>/dev/null || echo "")
+    if [ -n "$dns_result" ]; then
+        pass "DNS 解析: google.com → $dns_result"
+    else
+        fail "DNS 解析失败"
+    fi
 fi
 
 echo ""
