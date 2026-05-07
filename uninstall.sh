@@ -44,14 +44,15 @@ if [ -f "$RCLOCAL" ] && grep -q "qubes-clash-gateway" "$RCLOCAL" 2>/dev/null; th
     info "已清理 rc.local"
 fi
 
-# 清理 nftables 规则（auto-redirect 可能创建的）
+# 清理 nftables 规则
+nft delete table inet qcg_proxy 2>/dev/null || true
 nft delete table inet mihomo 2>/dev/null || true
 nft delete table inet clash 2>/dev/null || true
 info "已清理 nftables 规则"
 
-# 清理 ip rules
-ip rule del fwmark 0x162 lookup 2022 2>/dev/null || true
-info "已清理 ip rules"
+# 清理 clashctl
+rm -f /usr/local/bin/clashctl
+info "已清理 clashctl"
 
 # 询问是否删除配置
 echo ""

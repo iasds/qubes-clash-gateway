@@ -1,32 +1,29 @@
 # mihomo 配置模板 — Qubes OS 透明代理网关
-# 安装时会被 install.sh 复制到 /rw/config/clash/config.yaml
+# 核心设计: 禁用 dns-hijack 和 auto-redirect，手动用 nftables 劫持 AppVM 流量
+# 这样 mihomo 自己的 DNS 查询不会被劫持回 TUN，彻底解决 DNS 环路
 
 # ==================== 基础 ====================
-mixed-port: 7890          # HTTP/SOCKS5 混合代理端口
-allow-lan: true           # 允许局域网（AppVM）连接
+mixed-port: 7890
+allow-lan: true
 bind-address: "*"
 mode: rule
 log-level: info
-ipv6: false               # Qubes OS 不用 IPv6
+ipv6: false
 external-controller: 127.0.0.1:9090
-
-# 出站接口 — Qubes NetVM 的上游网卡
-# auto-detect-interface 会自动选择，但可以手动指定
-# interface-name: eth0
 
 # ==================== TUN ====================
 tun:
   enable: true
-  stack: system            # system 比 gvisor 在 Linux 网关上更稳定
-  auto-route: true         # 自动配置路由表
-  auto-redirect: true      # 自动配置 nftables/iptables 透明代理规则！
+  stack: system
+  # 关键: 不用 auto-redirect，手动用 nftables 规则
+  # auto-redirect 会创建 nftables 规则劫持所有流量，包括 mihomo 自己的 DNS → 环路
+  auto-route: true
+  auto-redirect: false
   auto-detect-interface: true
-  dns-hijack:
-    - any:53
-    - tcp://any:53
-  strict-route: true
   mtu: 9000
-  # 排除 Qubes 内部网络，避免影响 VM 间通信
+  strict-route: false
+  # 排除代理服务器 IP，避免代理流量回环
+  # 用户需在安装时填入实际代理服务器 IP
   route-exclude-address:
     - 10.0.0.0/8
     - 172.16.0.0/12
@@ -36,9 +33,8 @@ tun:
 dns:
   enable: true
   listen: 0.0.0.0:1053
-  enhanced-mode: fake-ip   # fake-ip 避免 DNS 污染和循环
+  enhanced-mode: fake-ip
   fake-ip-range: 198.18.0.1/16
-  # fake-ip-filter 控制哪些域名不用 fake-ip（返回真实 IP）
   fake-ip-filter:
     - "*.lan"
     - "*.local"
@@ -48,16 +44,15 @@ dns:
     - "ntp.*.com"
     - "+.msftconnecttest.com"
     - "+.msftncsi.com"
-  default-nameserver:      # 用于解析 nameserver 中的域名
-    - 114.114.114.114
+  default-nameserver:
     - 223.5.5.5
-  nameserver:              # 国内 DNS
-    - 114.114.114.114
+    - 119.29.29.29
+  nameserver:
     - 223.5.5.5
-  fallback:                # 国外 DNS（用域名，防代理侧 DNS 污染）
+    - 119.29.29.29
+  fallback:
     - https://cloudflare-dns.com/dns-query
     - https://dns.google/dns-query
-    - tls://dns.google
   fallback-filter:
     geoip: true
     geoip-code: CN
