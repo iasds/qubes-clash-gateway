@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Qubes Clash Gateway</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--card:#161b22;--border:#30363d;--text:#c9d1d9;--text2:#8b949e;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--yellow:#d29922;--radius:8px}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.app{display:flex;min-height:100vh}
+.sidebar{width:200px;background:var(--card);border-right:1px solid var(--border);padding:16px 0;flex-shrink:0}
+.sidebar h1{font-size:14px;padding:0 16px 16px;border-bottom:1px solid var(--border);margin-bottom:8px;color:var(--accent)}
+.nav-item{display:block;padding:8px 16px;cursor:pointer;font-size:14px;color:var(--text2);transition:all .15s}
+.nav-item:hover,.nav-item.active{background:rgba(88,166,255,.1);color:var(--accent)}
+.nav-item.active{border-left:3px solid var(--accent);padding-left:13px}
+.main{flex:1;padding:24px;overflow-y:auto;max-height:100vh}
+.section{display:none}.section.active{display:block}
+h2{font-size:18px;margin-bottom:16px;font-weight:600}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.card .label{font-size:12px;color:var(--text2);margin-bottom:4px}
+.card .value{font-size:20px;font-weight:700}
+.card .value.green{color:var(--green)}.card .value.red{color:var(--red)}.card .value.yellow{color:var(--yellow)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);color:var(--text);cursor:pointer;font-size:13px;transition:all .15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}.btn.primary:hover{opacity:.85}
+.btn.danger{border-color:var(--red);color:var(--red)}.btn.danger:hover{background:var(--red);color:#fff}
+.btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-group{display:flex;gap:8px;flex-wrap:wrap}
+.btn.sm{padding:4px 10px;font-size:12px}
+.table-wrap{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:16px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:10px 12px;background:rgba(255,255,255,.03);color:var(--text2);font-weight:500;border-bottom:1px solid var(--border)}
+td{padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(88,166,255,.04)}
+.tag{display:inline-block;padding:2px 6px;border-radius:4px;font-size:11px;background:rgba(88,166,255,.15);color:var(--accent)}
+.tag.direct{background:rgba(139,148,158,.15);color:var(--text2)}
+.tag.proxy{background:rgba(63,185,80,.15);color:var(--green)}
+.tag.reject{background:rgba(248,81,73,.15);color:var(--red)}
+input[type=text],input[type=url]{width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;outline:none}
+input:focus{border-color:var(--accent)}
+.form-row{display:flex;gap:8px;margin-bottom:12px}
+.form-row input{flex:1}
+.toast{position:fixed;top:20px;right:20px;padding:12px 20px;border-radius:var(--radius);font-size:13px;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}.toast.ok{background:var(--green);color:#000}.toast.err{background:var(--red);color:#fff}
+@media(max-width:768px){.sidebar{width:56px}.sidebar h1,.nav-text{display:none}.nav-item{text-align:center;padding:12px 0}.nav-item.active{border-left:none;border-bottom:3px solid var(--accent);padding-bottom:9px}.main{padding:16px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="sidebar">
+    <h1>&#9889; QCG</h1>
+    <div class="nav-item active" data-tab="dashboard"><span class="nav-text">&#128202; Dashboard</span></div>
+    <div class="nav-item" data-tab="nodes"><span class="nav-text">&#128279; Nodes</span></div>
+    <div class="nav-item" data-tab="connections"><span class="nav-text">&#128268; Connections</span></div>
+    <div class="nav-item" data-tab="subscriptions"><span class="nav-text">&#128230; Subscriptions</span></div>
+    <div class="nav-item" data-tab="system"><span class="nav-text">&#9881; System</span></div>
+  </nav>
+  <div class="main">
+    <div class="section active" id="sec-dashboard">
+      <h2>Dashboard</h2>
+      <div class="cards" id="status-cards"></div>
+      <h3 style="font-size:14px;margin-bottom:12px;color:var(--text2)">Mode</h3>
+      <div class="btn-group" id="mode-btns">
+        <button class="btn" onclick="setMode('rule')">Rule</button>
+        <button class="btn" onclick="setMode('global')">Global</button>
+        <button class="btn" onclick="setMode('direct')">Direct</button>
+      </div>
+    </div>
+    <div class="section" id="sec-nodes">
+      <h2>Nodes</h2>
+      <div style="margin-bottom:12px"><button class="btn" onclick="loadNodes()">Refresh</button></div>
+      <div id="nodes-list"></div>
+    </div>
+    <div class="section" id="sec-connections">
+      <h2>Connections</h2>
+      <div style="margin-bottom:12px" class="btn-group">
+        <button class="btn" onclick="loadConnections()">Refresh</button>
+        <button class="btn danger" onclick="closeAllConn()">Close All</button>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>Target</th><th>Proto</th><th>Source</th><th>Exit Node</th><th>Traffic</th><th></th></tr></thead><tbody id="conn-tbody"></tbody></table></div>
+    </div>
+    <div class="section" id="sec-subscriptions">
+      <h2>Subscriptions</h2>
+      <div class="form-row">
+        <input type="url" id="sub-url" placeholder="Subscription URL (Clash YAML / vmess / ss / trojan ...)">
+        <button class="btn primary" onclick="addSub()">Add</button>
+      </div>
+      <div style="margin-bottom:12px"><button class="btn" onclick="updateAllSubs()">Update All</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Name</th><th>Nodes</th><th>Updated</th><th></th></tr></thead><tbody id="sub-tbody"></tbody></table></div>
+    </div>
+    <div class="section" id="sec-system">
+      <h2>System</h2>
+      <div class="btn-group" style="margin-bottom:16px">
+        <button class="btn" onclick="doRestart()">Restart mihomo</button>
+        <button class="btn" onclick="doFlushDNS()">Flush DNS</button>
+        <button class="btn" onclick="doFlushFakeIP()">Flush Fake-IP</button>
+        <button class="btn danger" onclick="closeAllConn()">Close All Connections</button>
+      </div>
+      <div id="sys-log" style="font-size:12px;color:var(--text2);white-space:pre-wrap;font-family:monospace"></div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+document.querySelectorAll('.nav-item').forEach(el=>{
+  el.addEventListener('click',()=>{
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('sec-'+el.dataset.tab).classList.add('active');
+    var t=el.dataset.tab;
+    if(t==='nodes')loadNodes();
+    if(t==='connections')loadConnections();
+    if(t==='subscriptions')loadSubs();
+  });
+});
+function toast(m,ok){var t=document.getElementById('toast');t.textContent=m;t.className='toast show '+(ok?'ok':'err');setTimeout(function(){t.className='toast'},2500)}
+async function api(p,o){try{var r=await fetch(p,Object.assign({headers:{'Content-Type':'application/json'}},o||{}));if(!r.ok)throw new Error(await r.text());var ct=r.headers.get('content-type')||'';return ct.includes('json')?r.json():r.text()}catch(e){toast(e.message,false);throw e}}
+function fmtB(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB'}
+function esc(s){return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
+
+async function loadStatus(){
+  try{
+    var d=await api('/api/status');
+    var c=document.getElementById('status-cards');
+    var rc=d.running?'green':'red',rt=d.running?'Running':'Stopped';
+    var mm={rule:'Rule',global:'Global',direct:'Direct'};
+    c.innerHTML=
+      '<div class="card"><div class="label">mihomo</div><div class="value '+rc+'">'+rt+'</div></div>'+
+      '<div class="card"><div class="label">Version</div><div class="value" style="font-size:16px">'+(d.version||'-')+'</div></div>'+
+      '<div class="card"><div class="label">Mode</div><div class="value" style="font-size:16px">'+(mm[d.mode]||d.mode)+'</div></div>'+
+      '<div class="card"><div class="label">Exit IP</div><div class="value" style="font-size:14px">'+(d.exit_ip||'-')+'</div></div>'+
+      '<div class="card"><div class="label">Nodes</div><div class="value">'+(d.node_count||0)+'</div></div>'+
+      '<div class="card"><div class="label">Connections</div><div class="value">'+(d.connection_count||0)+'</div></div>';
+    document.querySelectorAll('#mode-btns .btn').forEach(function(b){b.classList.remove('active')});
+    var btns=document.querySelectorAll('#mode-btns .btn');
+    if(d.mode==='rule')btns[0].classList.add('active');
+    else if(d.mode==='global')btns[1].classList.add('active');
+    else if(d.mode==='direct')btns[2].classList.add('active');
+  }catch(e){}
+}
+async function setMode(m){try{await api('/api/mode',{method:'POST',body:JSON.stringify({mode:m})});toast('Switched to '+m.toUpperCase());loadStatus()}catch(e){}}
+
+async function loadNodes(){
+  try{
+    var d=await api('/api/nodes');
+    var el=document.getElementById('nodes-list');
+    if(!d.groups||!d.groups.length){el.innerHTML='<p style="color:var(--text2)">No proxy groups</p>';return}
+    var h='';
+    for(var i=0;i<d.groups.length;i++){
+      var g=d.groups[i];
+      h+='<div class="table-wrap"><table><thead><tr><th colspan="2">'+g.name+' <span class="tag">'+g.type+'</span> &mdash; Current: <b>'+(g.current||'-')+'</b></th></tr></thead><tbody>';
+      for(var j=0;j<g.members.length;j++){
+        var m=g.members[j];
+        var sel=m===g.current?'style="color:var(--green);font-weight:600"':'';
+        var btn=m===g.current?'<span class="tag proxy">active</span>':'<button class="btn sm" onclick="switchNode(\\''+esc(g.name)+'\\',\\''+esc(m)+'\\')">Switch</button>';
+        h+='<tr><td '+sel+'>'+m+'</td><td style="text-align:right">'+btn+'</td></tr>';
+      }
+      h+='</tbody></table></div>';
+    }
+    el.innerHTML=h;
+  }catch(e){}
+}
+async function switchNode(g,n){try{await api('/api/nodes/switch',{method:'POST',body:JSON.stringify({group:g,name:n})});toast('Switched: '+n);loadNodes();loadStatus()}catch(e){}}
+
+async function loadConnections(){
+  try{
+    var d=await api('/api/connections');
+    var tb=document.getElementById('conn-tbody');
+    var cs=d.connections||[];
+    if(!cs.length){tb.innerHTML='<tr><td colspan="6" style="color:var(--text2)">No active connections</td></tr>';return}
+    var h='';
+    for(var i=0;i<cs.length;i++){
+      var c=cs[i],m=c.metadata||{};
+      var chains=c.chains||[];
+      var last=chains.length?chains[chains.length-1]:'DIRECT';
+      var cc=last==='DIRECT'?'direct':last==='REJECT'?'reject':'proxy';
+      var host=m.host||m.destinationIP||'-';
+      var port=m.destinationPort?':'+m.destinationPort:'';
+      h+='<tr><td>'+host+port+'</td><td><span class="tag">'+(m.network||'tcp').toUpperCase()+'</span></td><td style="font-size:12px;color:var(--text2)">'+(m.sourceIP||'-')+'</td><td><span class="tag '+cc+'">'+last+'</span></td><td style="font-size:12px">'+fmtB(c.upload||0)+' / '+fmtB(c.download||0)+'</td><td><button class="btn sm danger" onclick="closeConn(\\''+c.id+'\\')">Kill</button></td></tr>';
+    }
+    tb.innerHTML=h;
+  }catch(e){}
+}
+async function closeConn(id){try{await api('/api/connections/'+encodeURIComponent(id),{method:'DELETE'});loadConnections()}catch(e){}}
+async function closeAllConn(){try{await api('/api/connections',{method:'DELETE'});toast('All connections closed');loadConnections()}catch(e){}}
+
+async function loadSubs(){
+  try{
+    var d=await api('/api/subscriptions');
+    var tb=document.getElementById('sub-tbody');
+    var ss=d.subscriptions||[];
+    if(!ss.length){tb.innerHTML='<tr><td colspan="4" style="color:var(--text2)">No subscriptions</td></tr>';return}
+    var h='';
+    for(var i=0;i<ss.length;i++){
+      var s=ss[i];
+      h+='<tr><td>'+(s.name||'-')+'</td><td>'+(s.proxy_count||0)+'</td><td style="font-size:12px;color:var(--text2)">'+(s.last_update_ago||s.last_update||'never')+'</td><td><button class="btn sm danger" onclick="removeSub('+i+')">Delete</button></td></tr>';
+    }
+    tb.innerHTML=h;
+  }catch(e){}
+}
+async function addSub(){var u=document.getElementById('sub-url').value.trim();if(!u)return toast('Enter URL',false);try{await api('/api/subscriptions',{method:'POST',body:JSON.stringify({url:u})});toast('Subscription added');document.getElementById('sub-url').value='';loadSubs();loadStatus()}catch(e){}}
+async function removeSub(i){try{await api('/api/subscriptions/'+i,{method:'DELETE'});toast('Deleted');loadSubs()}catch(e){}}
+async function updateAllSubs(){try{await api('/api/subscriptions/update',{method:'POST'});toast('Updated');loadSubs();loadStatus()}catch(e){}}
+
+function sysLog(m){document.getElementById('sys-log').textContent+='['+new Date().toLocaleTimeString()+'] '+m+'\n'}
+async function doRestart(){try{await api('/api/restart',{method:'POST'});toast('Restarting...');sysLog('mihomo restarted');setTimeout(loadStatus,2000)}catch(e){sysLog('Restart failed')}}
+async function doFlushDNS(){try{await api('/api/dns/flush',{method:'POST'});toast('DNS flushed');sysLog('DNS cache flushed')}catch(e){}}
+async function doFlushFakeIP(){try{await api('/api/fakeip/flush',{method:'POST'});toast('Fake-IP flushed');sysLog('Fake-IP cache flushed')}catch(e){}}
+
+loadStatus();
+setInterval(loadStatus,10000);
+</script>
+</body>
+</html>

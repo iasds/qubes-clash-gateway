@@ -363,6 +363,19 @@ def cmd_restart():
     else:
         _err("重启失败")
 
+def cmd_web(args: list[str]):
+    """Start web UI."""
+    port = 9091
+    if args:
+        try:
+            port = int(args[0])
+        except ValueError:
+            _err(f"无效端口: {args[0]}")
+            return
+    from .web import run_server
+    run_server("127.0.0.1", port)
+
+
 
 def cmd_help():
     """Show help."""
@@ -381,6 +394,7 @@ def cmd_help():
     _print(f"  /dns fake-ip|redir-host  切换 DNS 模式")
     _print(f"  /restart             重启 mihomo")
     _print(f"  /help                显示帮助")
+    _print(f"  /web [port]          启动 Web UI (默认 9091)")
     _print(f"  {'─' * 40}")
     _print(f"  {C_DIM}alias: /s=/status /m=/mode /n=/node /t=/test{C_RESET}")
     _print()
@@ -395,6 +409,7 @@ ALIASES = {
     "/t": "/test",
     "/h": "/help",
     "/r": "/restart",
+    "/w": "/web",
 }
 
 
@@ -435,6 +450,8 @@ def main():
                 _err(f"无效 DNS 模式: {args[1]}")
     elif cmd in ("/restart", "restart"):
         cmd_restart()
+    elif cmd in ("/web", "web"):
+        cmd_web(args[1:])
     elif cmd in ("/help", "help", "--help", "-h"):
         cmd_help()
     else:
