@@ -2,96 +2,94 @@
 
 [English](README.md) | **[中文](README_zh.md)**
 
-Qubes OS transparent proxy gateway powered by [mihomo](https://github.com/MetaCubeX/mihomo). Zero-config for AppVMs — all traffic (TCP/UDP, all ports) is automatically proxied through the gateway.
+Qubes OS transparent proxy gateway powered by [mihomo](https://github.com/MetaCubeX/mihomo). Turns a Qubes NetVM into a proxy gateway — any AppVM using it as NetVM gets proxied automatically, zero AppVM-side configuration.
 
-## Why?
+## Verified Working
 
-Qubes OS isolates VMs but doesn't solve the proxy problem. Running a proxy client in every AppVM is tedious. This project turns a Qubes NetVM into a transparent proxy gateway — any AppVM that uses it as its NetVM gets proxied automatically, with zero configuration on the AppVM side.
-
-**Compared to sing-box TUN approach** (previous project `qubes-singroute-gateway`):
-
-| Feature | sing-box | mihomo |
-|---------|----------|--------|
-| Auto nftables config | ❌ Manual | ✅ `auto-redirect` |
-| DNS hijacking | ❌ External forwarder needed | ✅ Built-in `dns-hijack` |
-| Fake-IP DNS | ❌ Not supported | ✅ Built-in |
-| Gateway documentation | ❌ None | ✅ "Works as expected on routers" |
-| Routing stability | ❌ Multiple edge cases | ✅ Battle-tested with Clash |
+| Feature | Status |
+|---------|--------|
+| Transparent proxy (TCP/UDP, all ports) | ✅ |
+| DNS fake-ip (198.18.x.x) | ✅ |
+| GeoIP rule-based routing (CN direct, foreign proxy) | ✅ |
+| nftables DNS hijack on vif* interfaces | ✅ |
+| mihomo TUN auto-route | ✅ |
+| systemd service + rc.local persistence | ✅ |
+| clashctl terminal control | ✅ |
+| Subscription parser (Clash YAML, vmess/ss/ssr/trojan/hy2/tuic) | ✅ |
 
 ## Quick Start
 
 ```bash
-# 1. Download mihomo binary from https://github.com/MetaCubeX/mihomo/releases
-#    Select: linux-amd64 .gz file
-#    Place it in this directory as mihomo.gz or /tmp/mihomo.gz
+# 1. Clone to NetVM
+git clone https://github.com/iasds/qubes-clash-gateway.git
+cd qubes-clash-gateway
 
-# 2. Install
-sudo bash install.sh
+# 2. Install (auto-detects Qubes NetVM, installs mihomo, configures nftables)
+sudo bash setup.sh
 
 # 3. Add subscription
-# Edit /rw/config/clash/config.yaml — add your proxy nodes under 'proxies:'
+clashctl /sub add <your-subscription-url>
 
-# 4. Restart
-sudo systemctl restart mihomo
+# 4. Select mode
+clashctl /mode rule    # Rule-based (recommended)
+clashctl /mode global  # Global proxy
+clashctl /mode direct  # Direct connection
 
-# 5. Test from NetVM
-bash scripts/test.sh
-
-# 6. In dom0, assign AppVM to use this NetVM
+# 5. In dom0, assign AppVM
 qvm-prefs <appvm-name> netvm <this-netvm-name>
 ```
 
 ## Architecture
 
 ```
-AppVM (any) → NetVM (sys-clash)
-    ↓ ALL traffic arrives on vif* interface
-mihomo TUN (auto-redirect handles nftables)
-    ├→ CN domains/IPs → direct out eth0
-    └→ Foreign → proxy nodes → upstream NetVM → internet
+AppVM → vif* interface → nftables (DNS hijack :53→:1053) → mihomo TUN
+                                                          ├→ CN domains/IPs → direct via eth0
+                                                          └→ Foreign → proxy nodes → upstream → internet
+```
+
+## Commands
+
+```bash
+clashctl /status          # Show status, traffic, nodes
+clashctl /mode rule       # Rule-based routing
+clashctl /mode global     # Global proxy
+clashctl /mode direct     # Direct connection
+clashctl /sub add <url>   # Add subscription
+clashctl /node <name>     # Select specific node
+clashctl /test            # Speed test nodes
+clashctl /dns             # Show DNS config
+clashctl /restart         # Restart mihomo
 ```
 
 ## Files
 
 ```
-├── install.sh              # Install script
-├── uninstall.sh            # Uninstall script
+├── setup.sh              # One-click install
+├── uninstall.sh          # Uninstall
 ├── config/
-│   └── config.yaml         # mihomo config template
+│   ├── config.yaml       # mihomo config template
+│   └── rules/            # Rule provider lists
 ├── scripts/
-│   └── test.sh             # Connectivity test
-└── clashctl/               # TUI management tool (planned)
+│   └── test.sh           # Connectivity test
+└── clashctl/
+    ├── __main__.py       # CLI entry point
+    ├── api.py            # mihomo REST API client
+    ├── parser.py         # Subscription parser
+    ├── proxy.py          # Mode switching / DNS config
+    └── ui.py             # Terminal UI
 ```
 
-## Persistence
+## Key Design Decisions
 
-Qubes AppVMs lose `/etc/` on reboot. This project handles persistence via:
+**DNS loop prevention**: mihomo's built-in `dns-hijack` creates a loop (mihomo's own DNS → TUN → fake-ip → mihomo). Solved by:
+- Disabling `dns-hijack` and `auto-redirect` in mihomo config
+- Manual nftables rules that only hijack DNS from `vif*` (AppVM) interfaces
+- `direct-nameserver` for mihomo's own DNS resolution
 
-- **`/rw/config/clash/`** — Config files (persistent)
-- **`/rw/config/rc.local`** — Boot script that starts mihomo and brings up vif interfaces
-- **`/usr/local/bin/mihomo`** — Binary (persistent in AppVM)
-
-## Configuration
-
-Edit `/rw/config/clash/config.yaml`:
-
-### Add Subscription
-
-```yaml
-proxy-groups:
-  - name: auto
-    type: url-test
-    proxies:
-      - node-1
-      - node-2
-    url: https://www.gstatic.com/generate_204
-    interval: 300
-```
-
-### DNS Modes
-
-- **`fake-ip`** (recommended): Returns fake IPs (198.18.x.x), prevents DNS pollution
-- **`redir-host`**: Returns real IPs, compatible with more applications
+**Persistence**: Qubes AppVMs lose `/etc/` on reboot:
+- `/rw/config/clash/` — Config and rule files (persistent)
+- `/rw/config/rc.local` — Boot script (starts mihomo + loads nftables)
+- `/usr/local/bin/mihomo` — Binary (persistent)
 
 ## Uninstall
 
