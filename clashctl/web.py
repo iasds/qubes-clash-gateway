@@ -24,6 +24,8 @@ from .api import ClashAPI, ClashAPIError
 WEB_HOST = "127.0.0.1"
 WEB_PORT = 9091
 
+_WEB_SECRET = ""  # Set via run_server(); empty = no auth
+
 _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "web_templates")
 _TEMPLATE_PATH = os.path.join(_TEMPLATE_DIR, "index.html")
 
@@ -118,12 +120,18 @@ def _time_ago(iso_str):
 # ── HTML ────────────────────────────────────────────────────────────────────
 
 _HTML_CACHE = None
+_HTML_CACHE_MTIME = 0.0  # file mtime when cached
 
 def _get_html() -> str:
-    global _HTML_CACHE
-    if _HTML_CACHE is None:
+    global _HTML_CACHE, _HTML_CACHE_MTIME
+    try:
+        mtime = os.path.getmtime(_TEMPLATE_PATH)
+    except OSError:
+        mtime = 0
+    if _HTML_CACHE is None or mtime != _HTML_CACHE_MTIME:
         with open(_TEMPLATE_PATH, encoding="utf-8") as f:
             _HTML_CACHE = f.read()
+        _HTML_CACHE_MTIME = mtime
     return _HTML_CACHE
 
 
@@ -274,6 +282,9 @@ def api_add_subscription(body):
     url = body.get("url", "")
     if not url:
         return {"error": "url required"}
+    # Basic URL validation to prevent SSRF
+    if not url.startswith(("http://", "https://")):
+        return {"error": "Only http/https URLs are allowed"}
     try:
         proxies = parse_subscription(url)
     except Exception as e:
@@ -375,10 +386,26 @@ class WebHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
 
+    def _check_auth(self) -> bool:
+        """Return True if request is authorized (or no secret is set)."""
+        if not _WEB_SECRET:
+            return True
+        # Check Authorization header: "Bearer <secret>"
+        auth = self.headers.get("Authorization", "")
+        if auth == f"Bearer {_WEB_SECRET}":
+            return True
+        # Check query param: ?token=<secret>
+        if f"token={_WEB_SECRET}" in self.path:
+            return True
+        return False
+
     def do_GET(self):
         path = self.path.split("?")[0]
         if path in ("/", "/index.html"):
+            # Serve HTML without auth (login page handles token)
             self._serve_html()
+        elif not self._check_auth():
+            _err(self, "Unauthorized", 401)
         elif path == "/api/status":
             _json(self, api_status())
         elif path == "/api/nodes":
@@ -391,6 +418,9 @@ class WebHandler(BaseHTTPRequestHandler):
             _err(self, "Not found", 404)
 
     def do_POST(self):
+        if not self._check_auth():
+            _err(self, "Unauthorized", 401)
+            return
         path = self.path.split("?")[0]
         body = _read_body(self)
         handlers = {
@@ -409,6 +439,9 @@ class WebHandler(BaseHTTPRequestHandler):
             _err(self, "Not found", 404)
 
     def do_DELETE(self):
+        if not self._check_auth():
+            _err(self, "Unauthorized", 401)
+            return
         path = self.path.split("?")[0]
         if path == "/api/connections":
             _json(self, api_close_all())
@@ -435,9 +468,20 @@ class WebHandler(BaseHTTPRequestHandler):
 
 # ── Server Runner ───────────────────────────────────────────────────────────
 
-def run_server(host: str = WEB_HOST, port: int = WEB_PORT):
+def run_server(host: str = WEB_HOST, port: int = WEB_PORT, secret: str = ""):
+    global _WEB_SECRET
+    if secret:
+        _WEB_SECRET = secret
+    elif not _WEB_SECRET:
+        # Generate a random token if none provided
+        import secrets as _secrets
+        _WEB_SECRET = _secrets.token_urlsafe(16)
+
     server = ThreadingHTTPServer((host, port), WebHandler)
     print(f"\033[32m[QCG Web]\033[0m http://{host}:{port}")
+    if _WEB_SECRET:
+        print(f"\033[33m[QCG Web]\033[0m Token: {_WEB_SECRET}")
+        print(f"\033[90mAccess: http://{host}:{port}?token={_WEB_SECRET}\033[0m")
     print(f"\033[90mPress Ctrl+C to stop\033[0m")
     try:
         server.serve_forever()

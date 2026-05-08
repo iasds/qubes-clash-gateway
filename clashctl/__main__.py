@@ -8,14 +8,25 @@ def main():
         from .web import run_server
         host = "127.0.0.1"
         port = 9091
-        if len(args) > 1:
-            try:
-                port = int(args[1])
-            except ValueError:
-                pass
-        if len(args) > 2:
-            host = args[2]
-        run_server(host, port)
+        secret = ""
+        i = 1
+        while i < len(args):
+            arg = args[i]
+            if arg == "--secret" and i + 1 < len(args):
+                secret = args[i + 1]
+                i += 2
+            elif arg == "--no-auth":
+                secret = ""
+                i += 1
+            elif not arg.startswith("-"):
+                try:
+                    port = int(arg)
+                except ValueError:
+                    host = arg
+                i += 1
+            else:
+                i += 1
+        run_server(host, port, secret)
     else:
         from .ui import main as ui_main
         ui_main()

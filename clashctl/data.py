@@ -36,7 +36,10 @@ def load_yaml(path, default=None):
 
 def save_yaml(path, data):
     """Save YAML config (requires pyyaml)"""
-    import yaml
+    try:
+        import yaml
+    except ImportError:
+        raise ImportError("PyYAML is required to save YAML files. Install with: pip install pyyaml")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:

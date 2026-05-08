@@ -22,6 +22,7 @@ from typing import Optional
 from .config import SPEEDTEST_TIMEOUT
 from .api import ClashAPI, ClashAPIError
 from .data import load_config, load_preferences
+from .proxy import restart as restart_mihomo
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
@@ -30,7 +31,7 @@ NODE_TIMEOUT = 3            # seconds timeout per node delay check
 MAX_FAIL_COUNT = 3          # consecutive failures before warning
 MONITOR_LOG_TAG = "clash-monitor"
 
-PID_FILE = "/tmp/clash-monitor.pid"
+PID_FILE = "/run/clash-monitor.pid"
 MIHOMO_RESTART_CMD = "systemctl restart mihomo"
 API_UNREACHABLE_THRESHOLD = 3  # consecutive API failures before restart
 
@@ -156,12 +157,11 @@ def run_check() -> bool:
                 f"API unreachable for {_api_fail_count} consecutive checks, "
                 f"attempting mihomo restart…"
             )
-            ret = os.system(MIHOMO_RESTART_CMD)
-            if ret == 0:
+            if restart_mihomo():
                 log("mihomo restart command issued successfully")
                 _api_fail_count = 0
             else:
-                log(f"mihomo restart command failed (exit code {ret})")
+                log("mihomo restart command failed")
         return False
 
     # ── Step 2: Get proxy nodes ──────────────────────────────────────────

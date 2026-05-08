@@ -149,6 +149,12 @@ systemctl daemon-reload
 systemctl enable mihomo
 info "systemd service 已创建"
 
+# sudoers — 允许用户免密重启 mihomo
+SUDOERS_FILE="/etc/sudoers.d/clashctl"
+cp "$INSTALL_DIR/config/sudoers-clashctl" "$SUDOERS_FILE"
+chmod 440 "$SUDOERS_FILE"
+info "sudoers 已配置（免密重启 mihomo）"
+
 # ==================== 5. nftables 透明代理规则 ====================
 step 5 "配置 nftables 透明代理"
 

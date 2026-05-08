@@ -1,25 +1,31 @@
-# mihomo binary
-mihomo
-mihomo.gz
-*.gz
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
 
-# Runtime
-*.log
-*.pid
-*.lock
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Python
-__pycache__/
-*.pyc
-.venv/
+# Runtime
+*.log
+*.pid
+*.sock
 
-# Editor
-*.swp
-*.swo
-*~
-.idea/
-.vscode/
+# mihomo runtime (should not be in repo)
+config/cache.db
+config/geoip.metadb
+config/GeoSite.dat
+config/*.bak
+config/rules/

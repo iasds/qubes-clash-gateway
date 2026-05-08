@@ -1,0 +1,4 @@
+# qubes-clash-gateway: allow user to restart mihomo without password
+user ALL=(root) NOPASSWD: /usr/bin/systemctl restart mihomo
+user ALL=(root) NOPASSWD: /usr/bin/systemctl start mihomo
+user ALL=(root) NOPASSWD: /usr/bin/systemctl stop mihomo

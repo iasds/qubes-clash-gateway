@@ -292,6 +292,113 @@ def _parse_tuic(uri: str) -> Optional[dict]:
         return None
 
 
+def _parse_vless(uri: str) -> Optional[dict]:
+    """Parse vless:// URI."""
+    if not uri.startswith("vless://"):
+        return None
+    try:
+        parsed = urlparse(uri)
+        name = unquote(parsed.fragment) if parsed.fragment else f"vless-{parsed.hostname}"
+
+        proxy = {
+            "name": name,
+            "type": "vless",
+            "server": parsed.hostname,
+            "port": parsed.port or 443,
+            "uuid": parsed.username or "",
+            "udp": True,
+        }
+
+        params = parse_qs(parsed.query)
+        if "security" in params:
+            sec = params["security"][0]
+            if sec == "tls":
+                proxy["tls"] = True
+            elif sec == "reality":
+                proxy["tls"] = True
+                proxy["reality-opts"] = {}
+                if "pbk" in params:
+                    proxy["reality-opts"]["public-key"] = params["pbk"][0]
+                if "sid" in params:
+                    proxy["reality-opts"]["short-id"] = params["sid"][0]
+        if "sni" in params:
+            proxy["servername"] = params["sni"][0]
+        if "flow" in params:
+            proxy["flow"] = params["flow"][0]
+        if "type" in params:
+            transport = params["type"][0]
+            if transport == "ws":
+                proxy["network"] = "ws"
+                ws_opts = {}
+                if "path" in params:
+                    ws_opts["path"] = unquote(params["path"][0])
+                if "host" in params:
+                    ws_opts["headers"] = {"Host": params["host"][0]}
+                if ws_opts:
+                    proxy["ws-opts"] = ws_opts
+            elif transport == "grpc":
+                proxy["network"] = "grpc"
+                if "serviceName" in params:
+                    proxy["grpc-opts"] = {"grpc-service-name": params["serviceName"][0]}
+            elif transport == "h2":
+                proxy["network"] = "h2"
+                h2_opts = {}
+                if "path" in params:
+                    h2_opts["path"] = unquote(params["path"][0])
+                if "host" in params:
+                    h2_opts["host"] = [params["host"][0]]
+                if h2_opts:
+                    proxy["h2-opts"] = h2_opts
+
+        return proxy
+    except Exception:
+        return None
+
+
+def _parse_wireguard(uri: str) -> Optional[dict]:
+    """Parse wireguard:// or wg:// URI."""
+    if not (uri.startswith("wireguard://") or uri.startswith("wg://")):
+        return None
+    try:
+        if uri.startswith("wg://"):
+            uri = "wireguard://" + uri[5:]
+        parsed = urlparse(uri)
+        name = unquote(parsed.fragment) if parsed.fragment else f"wg-{parsed.hostname}"
+
+        params = parse_qs(parsed.query)
+        private_key = parsed.username or params.get("privateKey", [""])[0]
+        public_key = params.get("publicKey", [""])[0]
+
+        if not private_key or not public_key:
+            return None
+
+        proxy = {
+            "name": name,
+            "type": "wireguard",
+            "server": parsed.hostname,
+            "port": parsed.port or 51820,
+            "private-key": private_key,
+            "public-key": public_key,
+            "udp": True,
+        }
+
+        if "presharedKey" in params:
+            proxy["pre-shared-key"] = params["presharedKey"][0]
+        if "ip" in params:
+            proxy["ip"] = params["ip"][0]
+        elif "localAddress" in params:
+            proxy["ip"] = params["localAddress"][0].split("/")[0]
+        if "mtu" in params:
+            proxy["mtu"] = int(params["mtu"][0])
+        if "reserved" in params:
+            reserved = [int(x) for x in params["reserved"][0].split(",")]
+            proxy["reserved"] = reserved
+
+        return proxy
+    except Exception:
+        return None
+
+
 # ── Dispatch ──────────────────────────────────────────────────────────────
 
 def parse_uri(uri: str) -> Optional[dict]:
@@ -302,11 +409,13 @@ def parse_uri(uri: str) -> Optional[dict]:
 
     parsers = [
         _parse_vmess,
+        _parse_vless,
         _parse_ssr,  # before ss:// since ssr:// starts differently
         _parse_ss,
         _parse_trojan,
         _parse_hysteria2,
         _parse_tuic,
+        _parse_wireguard,
     ]
 
     for parser in parsers:

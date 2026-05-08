@@ -120,11 +120,9 @@ def cmd_status():
 
     # Nodes
     try:
-        groups = get_proxy_groups()
-        total_nodes = 0
-        for g in groups:
-            if not g.is_group:
-                total_nodes += 1
+        api = ClashAPI()
+        groups = get_proxy_groups(api)
+        total_nodes = sum(len(g.members) for g in groups if g.is_group)
         _print(f"  nodes:      {total_nodes}")
         for g in groups:
             if g.is_group and g.current:
@@ -287,7 +285,8 @@ def cmd_node(args: list[str]):
     if not args:
         # List available nodes
         try:
-            groups = get_proxy_groups()
+            api = ClashAPI()
+            groups = get_proxy_groups(api)
             _print()
             for g in groups:
                 if g.is_group:
@@ -306,7 +305,7 @@ def cmd_node(args: list[str]):
     try:
         api = ClashAPI()
         # Find which group this node belongs to
-        groups = get_proxy_groups()
+        groups = get_proxy_groups(api)
         found = False
         for g in groups:
             if g.is_group and node_name in g.members:
@@ -331,25 +330,35 @@ def cmd_test(args: list[str]):
     """Speed test: /test [node_name]"""
     _info("测速中...")
     try:
+        api = ClashAPI()
+        cfg = load_config()
+        all_names = [p.get("name", "") for p in cfg.get("proxies", []) if p.get("name")]
+
         if args:
             node_name = " ".join(args)
-            # Test single node
-            results = speed_test([node_name])
+            if node_name not in all_names:
+                _err(f"未找到节点: {node_name}")
+                return
+            test_names = [node_name]
         else:
-            # Test all nodes
-            cfg = load_config()
-            names = [p.get("name", "") for p in cfg.get("proxies", []) if p.get("name")]
-            if not names:
+            if not all_names:
                 _warn("没有节点可测试")
                 return
-            results = speed_test(names)
+            test_names = all_names
+
+        # Build NodeInfo objects for speed_test()
+        from .nodes import NodeInfo
+        node_infos = [NodeInfo(name=n, type="") for n in test_names]
+        speed_test(api, node_infos)
 
         _print()
-        for name, delay in sorted(results.items(), key=lambda x: x[1] if x[1] > 0 else 99999):
-            if delay > 0:
-                _print(f"  {_green('●')} {name}: {delay}ms")
+        for node in node_infos:
+            if node.delay > 0:
+                _print(f"  {_green('●')} {node.name}: {node.delay}ms")
+            elif node.delay == 0:
+                _print(f"  {_red('○')} {node.name}: {_dim('timeout')}")
             else:
-                _print(f"  {_red('○')} {name}: {_dim('timeout')}")
+                _print(f"  {_dim('○')} {node.name}: {_dim('untested')}")
         _print()
     except Exception as e:
         _err(f"测速失败: {e}")
@@ -366,14 +375,25 @@ def cmd_restart():
 def cmd_web(args: list[str]):
     """Start web UI."""
     port = 9091
-    if args:
-        try:
-            port = int(args[0])
-        except ValueError:
-            _err(f"无效端口: {args[0]}")
-            return
+    secret = ""
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--secret" and i + 1 < len(args):
+            secret = args[i + 1]
+            i += 2
+        elif arg == "--no-auth":
+            secret = ""
+            i += 1
+        else:
+            try:
+                port = int(arg)
+            except ValueError:
+                _err(f"无效端口: {arg}")
+                return
+            i += 1
     from .web import run_server
-    run_server("127.0.0.1", port)
+    run_server("127.0.0.1", port, secret)
 
 
 

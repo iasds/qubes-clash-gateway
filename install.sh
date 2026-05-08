@@ -1,6 +1,7 @@
 #!/bin/bash
-# qubes-clash-gateway 安装脚本
-# 在 Qubes OS NetVM 上安装 mihomo 透明代理网关
+# qubes-clash-gateway 安装脚本（基础版）
+# 提示: 推荐使用 setup.sh 进行完整安装（含 nftables、clashctl、sudoers）
+# 本脚本仅做基础安装（mihomo + systemd + rc.local）
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

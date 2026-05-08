@@ -4,6 +4,8 @@
 
 # ==================== 基础 ====================
 mixed-port: 7890
+redir-port: 7892    # TCP 透明代理端口 (nftables redirect 目标)
+tproxy-port: 7893   # UDP 透明代理端口 (nftables redirect 目标)
 allow-lan: true
 bind-address: "*"
 mode: rule

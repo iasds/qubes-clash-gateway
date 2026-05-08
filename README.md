@@ -64,19 +64,27 @@ clashctl /restart         # Restart mihomo
 ## Files
 
 ```
-├── setup.sh              # One-click install
+├── setup.sh              # One-click install (recommended)
+├── install.sh            # Basic install (no nftables)
 ├── uninstall.sh          # Uninstall
 ├── config/
-│   ├── config.yaml       # mihomo config template
-│   └── rules/            # Rule provider lists
+│   └── config.yaml       # mihomo config template
 ├── scripts/
 │   └── test.sh           # Connectivity test
 └── clashctl/
     ├── __main__.py       # CLI entry point
     ├── api.py            # mihomo REST API client
-    ├── parser.py         # Subscription parser
-    ├── proxy.py          # Mode switching / DNS config
-    └── ui.py             # Terminal UI
+    ├── config.py         # Constants, paths, presets
+    ├── data.py           # JSON/YAML file I/O
+    ├── i18n.py           # zh/en translations
+    ├── monitor.py        # Health monitoring daemon
+    ├── nodes.py          # Node parsing, speed test, GeoIP
+    ├── parser.py         # Subscription parser (vmess/vless/ss/ssr/trojan/hy2/tuic/wg)
+    ├── proxy.py          # Mode switching, DNS config, service control
+    ├── ui.py             # Terminal UI
+    ├── web.py            # Web UI server
+    └── web_templates/
+        └── index.html    # Web UI (dark mode SPA)
 ```
 
 ## Key Design Decisions

@@ -54,6 +54,10 @@ info "已清理 nftables 规则"
 rm -f /usr/local/bin/clashctl
 info "已清理 clashctl"
 
+# 清理 sudoers
+rm -f /etc/sudoers.d/clashctl
+info "已清理 sudoers"
+
 # 询问是否删除配置
 echo ""
 read -p "是否删除配置目录 $CONFIG_DIR？[y/N] " -n 1 -r
