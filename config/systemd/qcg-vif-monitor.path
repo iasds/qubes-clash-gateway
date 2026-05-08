@@ -1,0 +1,9 @@
+[Unit]
+Description=Monitor new VIF interfaces
+
+[Path]
+PathModified=/sys/class/net
+MakeDirectory=yes
+
+[Install]
+WantedBy=multi-user.target

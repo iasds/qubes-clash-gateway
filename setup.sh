@@ -206,6 +206,43 @@ chmod +x "$NFT_SCRIPT"
 bash "$NFT_SCRIPT"
 info "nftables 规则已加载"
 
+# qubes-firewall-user-script — VM 连接时自动重载 nftables
+FW_SCRIPT="/rw/config/qubes-firewall-user-script"
+cat > "$FW_SCRIPT" << 'FWEOF'
+#!/bin/sh
+# Auto-load nftables transparent proxy rules when VMs connect
+/rw/config/clash/nftables-proxy.sh
+FWEOF
+chmod +x "$FW_SCRIPT"
+info "qubes-firewall-user-script 已配置"
+
+# systemd path unit — 监控新 vif 接口自动重载
+cat > /etc/systemd/system/qcg-vif-monitor.service << 'SVCEOF'
+[Unit]
+Description=QCG VIF Interface Monitor
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/rw/config/clash/nftables-proxy.sh
+SVCEOF
+
+cat > /etc/systemd/system/qcg-vif-monitor.path << 'PATHEOF'
+[Unit]
+Description=Monitor new VIF interfaces
+
+[Path]
+PathModified=/sys/class/net
+MakeDirectory=yes
+
+[Install]
+WantedBy=multi-user.target
+PATHEOF
+
+systemctl daemon-reload
+systemctl enable --now qcg-vif-monitor.path 2>/dev/null || true
+info "VIF 监控服务已启动"
+
 # rc.local — 持久化
 RCLOCAL="/rw/config/rc.local"
 # 先清理旧的 qcg 配置

@@ -1,0 +1,3 @@
+#!/bin/sh
+# Auto-load nftables transparent proxy rules when VMs connect
+/rw/config/clash/nftables-proxy.sh
