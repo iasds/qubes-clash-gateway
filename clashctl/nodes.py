@@ -286,23 +286,35 @@ _EXIT_IP_URLS = [
 ]
 
 
-def get_exit_ip(api=None, timeout: int = 10) -> str:
-    """Query the exit IP address.
+def _get_mihomo_proxy_handler(api=None):
+    """Build a urllib ProxyHandler that routes through mihomo mixed-port."""
+    if api is None:
+        return urllib.request.ProxyHandler({})  # no proxy
+    try:
+        cfg = api.get_configs()
+        port = cfg.get("mixed-port", 7890)
+    except Exception:
+        port = 7890
+    proxy_url = f"http://127.0.0.1:{port}"
+    return urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
 
-    If `api` (ClashAPI) is provided, routes through the mihomo proxy.
-    Otherwise, fetches directly.
+
+def get_exit_ip(api=None, timeout: int = 10) -> str:
+    """Query the exit IP address through the mihomo proxy.
 
     Args:
         api: Optional ClashAPI instance for proxy routing.
+             When provided, requests go through mihomo mixed-port.
         timeout: Request timeout in seconds.
 
     Returns:
         The exit IP as a string, or "Unknown" on failure.
     """
+    opener = urllib.request.build_opener(_get_mihomo_proxy_handler(api))
     for url in _EXIT_IP_URLS:
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "clashctl/1.0"})
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with opener.open(req, timeout=timeout) as resp:
                 body = resp.read().decode().strip()
                 # ipify returns JSON, the others return plain text
                 if body.startswith("{"):

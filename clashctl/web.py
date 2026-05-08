@@ -152,13 +152,10 @@ def api_status():
 
     exit_ip = ""
     try:
-        import urllib.request
-        req = urllib.request.Request(
-            "https://api.ipify.org?format=json",
-            headers={"User-Agent": "qcg/1.0"},
-        )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            exit_ip = json.loads(resp.read().decode()).get("ip", "")
+        from .nodes import get_exit_ip
+        exit_ip = get_exit_ip(api if running else None, timeout=5)
+        if exit_ip == "Unknown":
+            exit_ip = ""
     except Exception:
         pass
 

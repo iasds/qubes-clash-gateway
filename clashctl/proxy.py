@@ -113,15 +113,15 @@ def is_running() -> bool:
 def get_exit_ip() -> Optional[str]:
     """Return the exit IP address seen by the outside world.
 
-    Uses the mihomo API to fetch the external IP via an HTTP request through
-    the proxy.  Falls back to a direct request if the API is unavailable.
+    Routes the request through the mihomo mixed-port proxy so the returned
+    IP is the proxy exit IP, not the local gateway IP.
     """
-    test_url = "https://api.ipify.org?format=json"
+    from .nodes import get_exit_ip as _get_exit_ip
     try:
-        req = urllib.request.Request(test_url, headers={"User-Agent": "curl/8.0"})
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            import json
-            return json.loads(resp.read().decode()).get("ip")
+        from .api import ClashAPI
+        api = ClashAPI()
+        result = _get_exit_ip(api, timeout=8)
+        return None if result == "Unknown" else result
     except Exception:
         return None
 
