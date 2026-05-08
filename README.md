@@ -1,5 +1,7 @@
 # Qubes Clash Gateway
 
+English | [中文](README_CN.md)
+
 Transparent proxy gateway for Qubes OS, powered by [mihomo](https://github.com/MetaCubeX/mihomo). Turns a NetVM into a proxy gateway — AppVMs get proxied automatically with zero configuration.
 
 ## Features
