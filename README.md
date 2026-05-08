@@ -1,108 +1,187 @@
 # Qubes Clash Gateway
 
-[English](README.md) | **[中文](README_zh.md)**
+Transparent proxy gateway for Qubes OS, powered by [mihomo](https://github.com/MetaCubeX/mihomo). Turns a NetVM into a proxy gateway — AppVMs get proxied automatically with zero configuration.
 
-Qubes OS transparent proxy gateway powered by [mihomo](https://github.com/MetaCubeX/mihomo). Turns a Qubes NetVM into a proxy gateway — any AppVM using it as NetVM gets proxied automatically, zero AppVM-side configuration.
+## Features
 
-## Verified Working
+- Transparent proxy for all TCP/UDP traffic
+- DNS fake-ip to prevent pollution (198.18.x.x)
+- GeoIP rule-based routing (CN direct, foreign proxy)
+- Subscription parser (Clash YAML, vmess/vless/ss/ssr/trojan/hy2/tuic/wireguard)
+- Terminal controller `clashctl` + Web UI
 
-| Feature | Status |
-|---------|--------|
-| Transparent proxy (TCP/UDP, all ports) | ✅ |
-| DNS fake-ip (198.18.x.x) | ✅ |
-| GeoIP rule-based routing (CN direct, foreign proxy) | ✅ |
-| nftables DNS hijack on vif* interfaces | ✅ |
-| mihomo TUN auto-route | ✅ |
-| systemd service + rc.local persistence | ✅ |
-| clashctl terminal control | ✅ |
-| Subscription parser (Clash YAML, vmess/ss/ssr/trojan/hy2/tuic) | ✅ |
-
-## Quick Start
+## Installation
 
 ```bash
-# 1. Clone to NetVM
+# 1. SSH into the NetVM
+ssh user@<netvm-ip>
+
+# 2. Clone the project
 git clone https://github.com/iasds/qubes-clash-gateway.git
 cd qubes-clash-gateway
 
-# 2. Install (auto-detects Qubes NetVM, installs mihomo, configures nftables)
+# 3. One-click install (mihomo + nftables + clashctl + systemd)
 sudo bash setup.sh
 
-# 3. Add subscription
-clashctl /sub add <your-subscription-url>
+# 4. Add subscription
+clashctl /sub add <subscription-url>
 
-# 4. Select mode
-clashctl /mode rule    # Rule-based (recommended)
-clashctl /mode global  # Global proxy
-clashctl /mode direct  # Direct connection
+# 5. Select mode
+clashctl /mode rule      # Rule-based routing (recommended)
 
-# 5. In dom0, assign AppVM
+# 6. In dom0, assign AppVM to use this NetVM
 qvm-prefs <appvm-name> netvm <this-netvm-name>
+```
+
+AppVMs can access the internet immediately after installation.
+
+## Usage
+
+### Common Commands
+
+```bash
+clashctl /status              # Show status, traffic, node count
+clashctl /mode rule           # Rule-based routing
+clashctl /mode global         # Global proxy
+clashctl /mode direct         # Direct connection
+clashctl /sub add <url>       # Add subscription
+clashctl /sub update          # Update all subscriptions
+clashctl /sub list            # List subscriptions
+clashctl /node                # List all nodes
+clashctl /node <name>         # Select node
+clashctl /test                # Speed test all nodes
+clashctl /test <name>         # Speed test single node
+clashctl /dns fake-ip         # Switch DNS mode
+clashctl /restart             # Restart mihomo
+clashctl /web                 # Start Web UI (default port 9091)
+```
+
+Aliases: `/s`=`/status`, `/m`=`/mode`, `/n`=`/node`, `/t`=`/test`
+
+### Web UI
+
+```bash
+clashctl /web                 # Start with auto-generated token
+clashctl /web --secret <pass> # Start with custom token
+```
+
+Open `http://<netvm-ip>:9091` in browser, enter token to manage.
+
+### Test Connectivity
+
+```bash
+# On NetVM
+bash scripts/test.sh
+
+# On AppVM
+curl -s https://api.ipify.org          # Exit IP (should be proxy server)
+curl -s https://www.baidu.com          # CN direct
+curl -s https://www.google.com         # Foreign proxy
 ```
 
 ## Architecture
 
 ```
-AppVM → vif* interface → nftables (DNS hijack :53→:1053) → mihomo TUN
-                                                          ├→ CN domains/IPs → direct via eth0
-                                                          └→ Foreign → proxy nodes → upstream → internet
+AppVM → vif* interface → nftables redirect → mihomo
+                                           ├→ DNS :53 → :1053 (fake-ip)
+                                           ├→ TCP  → :7892 (redir-port)
+                                           └→ UDP  → :7893 (tproxy-port)
+
+mihomo routing:
+  ├→ CN domains/IPs → direct
+  └→ Foreign → proxy nodes → internet
 ```
 
-## Commands
+## Persistence
 
-```bash
-clashctl /status          # Show status, traffic, nodes
-clashctl /mode rule       # Rule-based routing
-clashctl /mode global     # Global proxy
-clashctl /mode direct     # Direct connection
-clashctl /sub add <url>   # Add subscription
-clashctl /node <name>     # Select specific node
-clashctl /test            # Speed test nodes
-clashctl /dns             # Show DNS config
-clashctl /restart         # Restart mihomo
+Qubes AppVMs lose `/etc/` on reboot. These paths persist:
+
+| Path | Content |
+|------|---------|
+| `/rw/config/clash/` | Config files, rules, subscription data |
+| `/rw/config/rc.local` | Boot script (mihomo + nftables) |
+| `/usr/local/bin/mihomo` | mihomo binary |
+| `/etc/systemd/system/mihomo.service` | systemd service |
+
+## Configuration
+
+Main config: `/rw/config/clash/config.yaml`
+
+### Add Proxy Nodes
+
+```yaml
+proxies:
+  - name: node1
+    type: ss
+    server: example.com
+    port: 443
+    cipher: aes-256-gcm
+    password: your-password
 ```
 
-## Files
+Or use command: `clashctl /sub add <subscription-url>`
 
+### Routing Rules
+
+```yaml
+rules:
+  - GEOSITE,cn,DIRECT       # CN domains direct
+  - GEOIP,CN,DIRECT         # CN IPs direct
+  - MATCH,auto               # Rest via proxy
 ```
-├── setup.sh              # One-click install (recommended)
-├── install.sh            # Basic install (no nftables)
-├── uninstall.sh          # Uninstall
-├── config/
-│   └── config.yaml       # mihomo config template
-├── scripts/
-│   └── test.sh           # Connectivity test
-└── clashctl/
-    ├── __main__.py       # CLI entry point
-    ├── api.py            # mihomo REST API client
-    ├── config.py         # Constants, paths, presets
-    ├── data.py           # JSON/YAML file I/O
-    ├── i18n.py           # zh/en translations
-    ├── monitor.py        # Health monitoring daemon
-    ├── nodes.py          # Node parsing, speed test, GeoIP
-    ├── parser.py         # Subscription parser (vmess/vless/ss/ssr/trojan/hy2/tuic/wg)
-    ├── proxy.py          # Mode switching, DNS config, service control
-    ├── ui.py             # Terminal UI
-    ├── web.py            # Web UI server
-    └── web_templates/
-        └── index.html    # Web UI (dark mode SPA)
-```
-
-## Key Design Decisions
-
-**DNS loop prevention**: mihomo's built-in `dns-hijack` creates a loop (mihomo's own DNS → TUN → fake-ip → mihomo). Solved by:
-- Disabling `dns-hijack` and `auto-redirect` in mihomo config
-- Manual nftables rules that only hijack DNS from `vif*` (AppVM) interfaces
-- `direct-nameserver` for mihomo's own DNS resolution
-
-**Persistence**: Qubes AppVMs lose `/etc/` on reboot:
-- `/rw/config/clash/` — Config and rule files (persistent)
-- `/rw/config/rc.local` — Boot script (starts mihomo + loads nftables)
-- `/usr/local/bin/mihomo` — Binary (persistent)
 
 ## Uninstall
 
 ```bash
+# Run on NetVM
 sudo bash uninstall.sh
+```
+
+This will:
+- Stop and remove mihomo systemd service
+- Remove `/usr/local/bin/mihomo`
+- Remove `/etc/sudoers.d/clashctl`
+- Clean boot config from `/rw/config/rc.local`
+- Remove nftables rules
+
+Config files in `/rw/config/clash/` are preserved. Remove manually:
+
+```bash
+sudo rm -rf /rw/config/clash
+```
+
+In dom0, change AppVM netvm back:
+
+```bash
+qvm-prefs <appvm-name> netvm <original-netvm>
+```
+
+## File Structure
+
+```
+├── setup.sh                  # One-click install
+├── install.sh                # Basic install (mihomo only)
+├── uninstall.sh              # Uninstall
+├── config/
+│   ├── config.yaml           # mihomo config template
+│   ├── nftables-proxy.sh     # nftables transparent proxy rules
+│   └── sudoers-clashctl      # sudoers passwordless config
+├── scripts/
+│   └── test.sh               # Connectivity test
+└── clashctl/
+    ├── __main__.py            # CLI entry
+    ├── api.py                 # mihomo REST API
+    ├── config.py              # Constants and presets
+    ├── data.py                # File I/O
+    ├── i18n.py                # Internationalization
+    ├── monitor.py             # Health monitoring
+    ├── nodes.py               # Node parsing and speed test
+    ├── parser.py              # Subscription URI parser
+    ├── proxy.py               # Mode switching and service control
+    ├── ui.py                  # Terminal UI
+    ├── web.py                 # Web UI server
+    └── web_templates/
+        └── index.html         # Web UI frontend
 ```
 
 ## License
