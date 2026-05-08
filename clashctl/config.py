@@ -12,7 +12,19 @@ RULE_PROVIDERS_DIR = os.path.join(CLASH_DIR, "rule-providers")
 # mihomo API
 API_BASE = "http://127.0.0.1"
 API_PORT = 9090
-API_SECRET = ""  # No secret by default on localhost
+
+def _read_mihomo_secret():
+    """Read API secret from mihomo config.yaml if present."""
+    try:
+        import yaml
+        with open(os.path.join(CLASH_DIR, "config.yaml"), encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+        return cfg.get("secret", "")
+    except Exception:
+        return ""
+
+# Auto-read from config if not explicitly set
+API_SECRET = os.environ.get("QCG_API_SECRET", "") or _read_mihomo_secret()
 
 # Speedtest
 DEFAULT_SPEEDTEST_URL = "https://www.gstatic.com/generate_204"

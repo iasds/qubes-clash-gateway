@@ -71,7 +71,7 @@ input:focus{border-color:var(--accent)}
     </div>
     <div class="section" id="sec-nodes">
       <h2>Nodes</h2>
-      <div style="margin-bottom:12px"><button class="btn" onclick="loadNodes()">Refresh</button></div>
+      <div style="margin-bottom:12px"><button class="btn" onclick="loadNodes()">Refresh</button> <button class="btn primary" onclick="speedTestAll()">⚡ 全部测速</button></div>
       <div id="nodes-list"></div>
     </div>
     <div class="section" id="sec-connections">
@@ -144,45 +144,111 @@ async function loadStatus(){
     else if(d.mode==='direct')btns[2].classList.add('active');
   }catch(e){}
 }
-async function setMode(m){try{await api('/api/mode',{method:'POST',body:JSON.stringify({mode:m})});toast('Switched to '+m.toUpperCase());loadStatus()}catch(e){}}
+async function setMode(m){try{var r=await api('/api/mode',{method:'POST',body:JSON.stringify({mode:m})});if(r.error)throw new Error(r.error);toast('已切换: '+m.toUpperCase());loadStatus()}catch(e){toast('切换失败: '+e.message,false);loadStatus()}}
 
 async function loadNodes(){
   try{
     var d=await api('/api/nodes');
     var el=document.getElementById('nodes-list');
     if(!d.groups||!d.groups.length){el.innerHTML='<p style="color:var(--text2)">No proxy groups</p>';return}
-    var h='';
+    var h='<div style="margin-bottom:12px"><button class="btn primary" onclick="speedTestAll()">⚡ 全部测速</button></div>';
     for(var i=0;i<d.groups.length;i++){
       var g=d.groups[i];
-      h+='<div class="table-wrap"><table><thead><tr><th colspan="2">'+g.name+' <span class="tag">'+g.type+'</span> &mdash; Current: <b>'+(g.current||'-')+'</b></th></tr></thead><tbody>';
+      h+='<div class="table-wrap" id="group-'+i+'"><table><thead><tr><th colspan="3">'+esc(g.name)+' <span class="tag">'+g.type+'</span> — Current: <b>'+(g.current||'-')+'</b> <button class="btn sm" onclick="speedTestGroup(\''+esc(g.name)+'\','+i+')" style="float:right">⚡ 测速</button></th></tr></thead><tbody id="group-tbody-'+i+'">';
       for(var j=0;j<g.members.length;j++){
         var m=g.members[j];
         var sel=m===g.current?'style="color:var(--green);font-weight:600"':'';
         var btn=m===g.current?'<span class="tag proxy">active</span>':'<button class="btn sm" onclick="switchNode(\''+esc(g.name)+'\',\''+esc(m)+'\')">Switch</button>';
-        h+='<tr><td '+sel+'>'+m+'</td><td style="text-align:right">'+btn+'</td></tr>';
+        h+='<tr id="node-'+i+'-'+j+'"><td '+sel+'>'+esc(m)+'</td><td class="delay-cell" style="font-size:12px;color:var(--text2)">—</td><td style="text-align:right">'+btn+'</td></tr>';
       }
       h+='</tbody></table></div>';
     }
     el.innerHTML=h;
+    _nodeGroups=d.groups;
   }catch(e){}
+}
+var _nodeGroups=[];
+async function speedTestGroup(group,idx){
+  try{
+    toast('测速中: '+group+'...');
+    var r=await api('/api/speed-test',{method:'POST',body:JSON.stringify({group:group})});
+    if(r.error)throw new Error(r.error);
+    var results=r.results||[];
+    var delayMap={};
+    results.forEach(function(n){delayMap[n.name]=n.delay});
+    var g=_nodeGroups[idx];
+    if(!g)return;
+    for(var j=0;j<g.members.length;j++){
+      var cell=document.querySelector('#node-'+idx+'-'+j+' .delay-cell');
+      if(!cell)continue;
+      var d=delayMap[g.members[j]];
+      if(d===undefined)cell.textContent='—';
+      else if(d<=0){cell.textContent='timeout';cell.style.color='var(--red)'}
+      else if(d<200){cell.textContent=d+'ms';cell.style.color='var(--green)'}
+      else if(d<500){cell.textContent=d+'ms';cell.style.color='var(--text)'}
+      else{cell.textContent=d+'ms';cell.style.color='var(--red)'}
+    }
+    toast('测速完成: '+group);
+  }catch(e){toast('测速失败: '+e.message,false)}
+}
+async function speedTestAll(){
+  try{
+    toast('全部测速中...');
+    var r=await api('/api/speed-test',{method:'POST',body:JSON.stringify({})});
+    if(r.error)throw new Error(r.error);
+    var results=r.results||[];
+    var delayMap={};
+    results.forEach(function(n){delayMap[n.name]=n.delay});
+    for(var i=0;i<_nodeGroups.length;i++){
+      var g=_nodeGroups[i];
+      for(var j=0;j<g.members.length;j++){
+        var cell=document.querySelector('#node-'+i+'-'+j+' .delay-cell');
+        if(!cell)continue;
+        var d=delayMap[g.members[j]];
+        if(d===undefined)cell.textContent='—';
+        else if(d<=0){cell.textContent='timeout';cell.style.color='var(--red)'}
+        else if(d<200){cell.textContent=d+'ms';cell.style.color='var(--green)'}
+        else if(d<500){cell.textContent=d+'ms';cell.style.color='var(--text)'}
+        else{cell.textContent=d+'ms';cell.style.color='var(--red)'}
+      }
+    }
+    toast('全部测速完成 ('+results.length+' 节点)');
+  }catch(e){toast('测速失败: '+e.message,false)}
 }
 async function switchNode(g,n){try{await api('/api/nodes/switch',{method:'POST',body:JSON.stringify({group:g,name:n})});toast('Switched: '+n);loadNodes();loadStatus()}catch(e){}}
 
 async function loadConnections(){
   try{
-    var d=await api('/api/connections');
+    var [cd,nd]=await Promise.all([api('/api/connections'),api('/api/nodes')]);
     var tb=document.getElementById('conn-tbody');
-    var cs=d.connections||[];
+    var cs=cd.connections||[];
     if(!cs.length){tb.innerHTML='<tr><td colspan="6" style="color:var(--text2)">No active connections</td></tr>';return}
+    // Build group→current map for exit node resolution
+    var gmap={};
+    (nd.groups||[]).forEach(function(g){gmap[g.name]=g.current});
     var h='';
     for(var i=0;i<cs.length;i++){
       var c=cs[i],m=c.metadata||{};
       var chains=c.chains||[];
-      var last=chains.length?chains[chains.length-1]:'DIRECT';
-      var cc=last==='DIRECT'?'direct':last==='REJECT'?'reject':'proxy';
+      // Resolve actual exit node: chains is inner→outer, first element = actual proxy node
+      var exit='DIRECT';
+      for(var ci=0;ci<chains.length;ci++){
+        var ch=chains[ci];
+        if(ch==='DIRECT'||ch==='REJECT'){exit=ch;break}
+        if(gmap[ch]){
+          // It's a group name — resolve to its current selected node
+          var resolved=gmap[ch];
+          if(resolved==='DIRECT'||resolved==='REJECT'){exit=resolved;break}
+          if(!gmap[resolved]){exit=resolved;break} // resolved is a real node
+          // resolved is another group, keep going
+          continue;
+        }
+        exit=ch;break; // real proxy node
+      }
+      var cc=exit==='DIRECT'?'direct':exit==='REJECT'?'reject':'proxy';
       var host=m.host||m.destinationIP||'-';
       var port=m.destinationPort?':'+m.destinationPort:'';
-      h+='<tr><td>'+host+port+'</td><td><span class="tag">'+(m.network||'tcp').toUpperCase()+'</span></td><td style="font-size:12px;color:var(--text2)">'+(m.sourceIP||'-')+'</td><td><span class="tag '+cc+'">'+last+'</span></td><td style="font-size:12px">'+fmtB(c.upload||0)+' / '+fmtB(c.download||0)+'</td><td><button class="btn sm danger" onclick="closeConn(\''+c.id+'\')">Kill</button></td></tr>';
+      h+='<tr><td>'+host+port+'</td><td><span class="tag">'+(m.network||'tcp').toUpperCase()+'</span></td><td style="font-size:12px;color:var(--text2)">'+(m.sourceIP||'-')+'</td><td><span class="tag '+cc+'">'+esc(exit)+'</span></td><td style="font-size:12px">'+fmtB(c.upload||0)+' / '+fmtB(c.download||0)+'</td><td><button class="btn sm danger" onclick="closeConn(\''+c.id+'\')">Kill</button></td></tr>';
     }
     tb.innerHTML=h;
   }catch(e){}

@@ -264,10 +264,16 @@ def api_set_mode(body):
     if mode not in ("rule", "global", "direct"):
         return {"error": "invalid mode"}
     try:
-        from .proxy import apply_mode
-        return {"ok": apply_mode(mode)}
+        api = _api()
+        api.mode(mode)
+        return {"ok": True, "mode": mode}
     except Exception as e:
-        return {"error": str(e)}
+        # Fallback: try full config rebuild
+        try:
+            from .proxy import apply_mode
+            return {"ok": apply_mode(mode), "mode": mode, "fallback": True}
+        except Exception as e2:
+            return {"error": f"API: {e}; fallback: {e2}"}
 
 
 def api_subscriptions():
@@ -379,6 +385,40 @@ def api_flush_fakeip():
         return {"error": str(e)}
 
 
+def api_speed_test(body):
+    """Run latency test for nodes in a group, or all groups."""
+    group = body.get("group", "")
+    try:
+        api = _api()
+        from .nodes import speed_test, get_group_nodes, get_proxy_groups, NodeInfo
+
+        if group:
+            nodes = get_group_nodes(api, group)
+        else:
+            # Test all nodes from all groups
+            groups = get_proxy_groups(api)
+            seen = set()
+            nodes = []
+            for g in groups:
+                for m in g.members:
+                    if m not in seen:
+                        seen.add(m)
+                        nodes.append(NodeInfo(name=m, type=""))
+
+        if not nodes:
+            return {"results": [], "message": "no nodes to test"}
+
+        results = speed_test(api, nodes)
+        return {
+            "results": [
+                {"name": n.name, "delay": n.delay, "type": n.type}
+                for n in results
+            ]
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 # ── Request Handler ─────────────────────────────────────────────────────────
 
 class WebHandler(BaseHTTPRequestHandler):
@@ -431,6 +471,7 @@ class WebHandler(BaseHTTPRequestHandler):
             "/api/restart": lambda: api_restart(),
             "/api/dns/flush": lambda: api_flush_dns(),
             "/api/fakeip/flush": lambda: api_flush_fakeip(),
+            "/api/speed-test": lambda: api_speed_test(body),
         }
         fn = handlers.get(path)
         if fn:

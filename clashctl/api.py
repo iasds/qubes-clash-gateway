@@ -289,11 +289,11 @@ class ClashAPI:
 
     def flush_dns_cache(self) -> None:
         """Flush the DNS cache."""
-        self._delete("/cache/dns/flush")
+        self._post("/cache/dns/flush")
 
     def flush_fake_ip_cache(self) -> None:
         """Flush the fake-IP mapping cache."""
-        self._delete("/cache/fakeip/flush")
+        self._post("/cache/fakeip/flush")
 
     # ── Subscriptions / Providers update ──────────────────────────
 
