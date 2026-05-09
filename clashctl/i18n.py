@@ -11,8 +11,8 @@ Usage:
     print(t("nodes_count", count=5))
 """
 
-# Current language (default: zh)
-_LANG = "zh"
+# Current language (default: en)
+_LANG = "en"
 
 # ── Translation tables ──────────────────────────────────────────────
 

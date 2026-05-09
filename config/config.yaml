@@ -1,11 +1,11 @@
-# mihomo 配置模板 — Qubes OS 透明代理网关
-# 核心设计: 禁用 dns-hijack 和 auto-redirect，手动用 nftables 劫持 AppVM 流量
-# 这样 mihomo 自己的 DNS 查询不会被劫持回 TUN，彻底解决 DNS 环路
+# mihomo config template — Qubes OS transparent proxy gateway
+# Core design: Disable dns-hijack and auto-redirect, manually use nftables to hijack AppVM traffic
+# This way mihomo's own DNS queries won't be hijacked back to TUN, fully resolving DNS loops
 
-# ==================== 基础 ====================
+# ==================== Basic ====================
 mixed-port: 7890
-redir-port: 7892    # TCP 透明代理端口 (nftables redirect 目标)
-tproxy-port: 7893   # UDP 透明代理端口 (nftables redirect 目标)
+redir-port: 7892    # TCP transparent proxy port (nftables redirect target)
+tproxy-port: 7893   # UDP transparent proxy port (nftables redirect target)
 allow-lan: true
 bind-address: "*"
 mode: rule
@@ -17,15 +17,15 @@ external-controller: 127.0.0.1:9090
 tun:
   enable: true
   stack: system
-  # 关键: 不用 auto-redirect，手动用 nftables 规则
-  # auto-redirect 会创建 nftables 规则劫持所有流量，包括 mihomo 自己的 DNS → 环路
+  # Key: Don't use auto-redirect, manually use nftables rules
+  # auto-redirect creates nftables rules to hijack all traffic including mihomo's own DNS → loop
   auto-route: true
   auto-redirect: false
   auto-detect-interface: true
   mtu: 9000
   strict-route: false
-  # 排除代理服务器 IP，避免代理流量回环
-  # 用户需在安装时填入实际代理服务器 IP
+  # Exclude proxy server IPs to avoid proxy traffic loops
+  # Users need to fill in actual proxy server IPs during installation
   route-exclude-address:
     - 10.0.0.0/8
     - 172.16.0.0/12
@@ -61,8 +61,8 @@ dns:
     ipcidr:
       - 240.0.0.0/4
 
-# ==================== 代理节点 ====================
-# 由 clashctl 或手动添加
+# ==================== Proxy Nodes ====================
+# Added by clashctl or manually
 proxies: []
 
 proxy-groups:
@@ -79,17 +79,17 @@ proxy-groups:
       - DIRECT
       - auto
 
-# ==================== 分流规则 ====================
+# ==================== Routing Rules ====================
 rules:
-  # 私有地址直连
+  # Private addresses direct
   - IP-CIDR,10.0.0.0/8,DIRECT
   - IP-CIDR,172.16.0.0/12,DIRECT
   - IP-CIDR,192.168.0.0/16,DIRECT
   - IP-CIDR,127.0.0.0/8,DIRECT
 
-  # 国内直连
+  # CN direct
   - GEOSITE,cn,DIRECT
   - GEOIP,CN,DIRECT
 
-  # 兜底走代理
+  # Default: use proxy
   - MATCH,auto

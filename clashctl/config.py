@@ -85,8 +85,8 @@ PRIVATE_CIDRS = [
 # ── Rule presets ──
 RULE_PRESETS = {
     "smart-split": {
-        "name": "智能分流",
-        "desc": "中国直连，国外自动选节点",
+        "name": "Smart Split",
+        "desc": "China direct, overseas auto-select node",
         "rules": [
             "RULE-SET,geosite-ads,REJECT",
             "RULE-SET,geosite-cn,DIRECT",
@@ -96,16 +96,16 @@ RULE_PRESETS = {
         ],
     },
     "all-proxy": {
-        "name": "全部代理",
-        "desc": "所有流量走自动选节点",
+        "name": "All Proxy",
+        "desc": "All traffic through auto-selected node",
         "rules": [
             "GEOIP,private,DIRECT",
             "MATCH,auto",
         ],
     },
     "bypass-cn": {
-        "name": "仅代理受限",
-        "desc": "只代理已知受限站点",
+        "name": "Proxy Restricted Only",
+        "desc": "Only proxy known restricted sites",
         "rules": [
             "RULE-SET,geosite-ads,REJECT",
             "DOMAIN-SUFFIX,google.com,auto",
@@ -141,8 +141,8 @@ RULE_PRESETS = {
 # ── DNS presets ──
 DNS_PRESETS = {
     "fake-ip": {
-        "name": "Fake-IP（推荐）",
-        "desc": "防DNS污染，CN域名fallback直连",
+        "name": "Fake-IP (Recommended)",
+        "desc": "Anti DNS pollution, CN domains fallback to direct",
         "enhanced-mode": "fake-ip",
         "fake-ip-range": "198.18.0.1/16",
         "nameserver": [
@@ -202,7 +202,7 @@ DNS_PRESETS = {
     },
     "redir-host": {
         "name": "Redir-Host",
-        "desc": "传统模式，兼容性好",
+        "desc": "Traditional mode, good compatibility",
         "enhanced-mode": "redir-host",
         "nameserver": [
             "https://cloudflare-dns.com/dns-query",

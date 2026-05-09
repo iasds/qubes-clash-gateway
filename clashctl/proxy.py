@@ -77,8 +77,8 @@ def _build_base_config() -> dict:
         "tun": {
             "enable": True,
             "stack": "system",
-            # 关键: 不用 auto-redirect 和 dns-hijack
-            # 手动用 nftables 劫持 AppVM 流量，避免 mihomo 自身 DNS 环路
+            # Key: don't use auto-redirect and dns-hijack
+            # Manually use nftables to hijack AppVM traffic, avoiding mihomo's own DNS loop
             "auto-route": True,
             "auto-redirect": False,
             "auto-detect-interface": True,

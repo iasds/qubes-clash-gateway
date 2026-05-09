@@ -88,20 +88,20 @@ def save_subscriptions(subs):
 
 def time_ago(iso_str):
     if not iso_str:
-        return "从未"
+        return "never"
     try:
         dt = datetime.fromisoformat(iso_str)
         diff = datetime.now() - dt
         secs = int(diff.total_seconds())
         if secs < 60:
-            return f"{secs}秒前"
+            return f"{secs}s ago"
         if secs < 3600:
-            return f"{secs // 60}分钟前"
+            return f"{secs // 60}m ago"
         if secs < 86400:
-            return f"{secs // 3600}h前"
-        return f"{secs // 86400}天前"
+            return f"{secs // 3600}h ago"
+        return f"{secs // 86400}d ago"
     except Exception:
-        return "未知"
+        return "unknown"
 
 
 def uptime_str(secs):

@@ -146,29 +146,29 @@ def cmd_mode(args: list[str]):
     """Switch proxy mode: /mode global|rule|direct"""
     if not args:
         mode = detect_current_mode()
-        _print(f"\n  当前模式: {_mode_color(mode)}\n  用法: clashctl /mode global|rule|direct\n")
+        _print(f"\n  Current mode: {_mode_color(mode)}\n  Usage: clashctl /mode global|rule|direct\n")
         return
 
     mode = args[0].lower()
     if mode not in ("global", "rule", "direct"):
-        _err(f"无效模式: {mode}，可选: global, rule, direct")
+        _err(f"Invalid mode: {mode}, options: global, rule, direct")
         return
 
-    _info(f"切换到 {mode.upper()} 模式...")
+    _info(f"Switching to {mode.upper()} mode...")
     if apply_mode(mode):
-        _ok(f"已切换到 {mode.upper()} 模式")
+        _ok(f"Switched to {mode.upper()} mode")
     else:
-        _err("切换失败")
+        _err("Switch failed")
 
 
 def cmd_sub(args: list[str]):
     """Subscription management: /sub add|update|list"""
     if not args:
-        _print("\n  用法:")
-        _print("    clashctl /sub add <url>      添加订阅")
-        _print("    clashctl /sub update         更新所有订阅")
-        _print("    clashctl /sub list           列出订阅")
-        _print("    clashctl /sub remove <name>  删除订阅")
+        _print("\n  Usage:")
+        _print("    clashctl /sub add <url>      Add subscription")
+        _print("    clashctl /sub update         Update all subscriptions")
+        _print("    clashctl /sub list           List subscriptions")
+        _print("    clashctl /sub remove <name>  Remove subscription")
         _print()
         return
 
@@ -176,18 +176,18 @@ def cmd_sub(args: list[str]):
 
     if action == "add":
         if len(args) < 2:
-            _err("请提供订阅 URL")
+            _err("Please provide a subscription URL")
             return
         url = args[1]
-        _info(f"获取订阅...")
+        _info(f"Fetching subscription...")
         try:
             proxies = parse_subscription(url)
         except Exception as e:
-            _err(f"获取失败: {e}")
+            _err(f"Fetch failed: {e}")
             return
 
         if not proxies:
-            _err("订阅内容为空或解析失败")
+            _err("Subscription content is empty or parse failed")
             return
 
         name = f"sub-{datetime.now().strftime('%m%d%H%M')}"
@@ -216,28 +216,28 @@ def cmd_sub(args: list[str]):
         from .data import save_config
         save_config(cfg)
 
-        _ok(f"已添加 {len(proxies)} 个节点 (新增 {added})")
+        _ok(f"Added {len(proxies)} nodes ({added} new)")
 
     elif action == "update":
         subs = load_subscriptions()
         sub_list = subs.get("subscriptions", [])
         if not sub_list:
-            _warn("没有订阅")
+            _warn("No subscriptions")
             return
 
         cfg = load_config()
         all_new_proxies = []
         for sub in sub_list:
             url = sub.get("url", "")
-            _info(f"更新 {sub.get('name', url[:30])}...")
+            _info(f"Updating {sub.get('name', url[:30])}...")
             try:
                 proxies = parse_subscription(url)
                 all_new_proxies.extend(proxies)
                 sub["proxy_count"] = len(proxies)
                 sub["last_update"] = datetime.now().isoformat()
-                _ok(f"  {len(proxies)} 个节点")
+                _ok(f"  {len(proxies)} nodes")
             except Exception as e:
-                _err(f"  失败: {e}")
+                _err(f"  Failed: {e}")
 
         if all_new_proxies:
             cfg["proxies"] = all_new_proxies
@@ -249,13 +249,13 @@ def cmd_sub(args: list[str]):
             from .proxy import apply_mode
             mode = detect_current_mode()
             apply_mode(mode)
-            _ok(f"共 {len(all_new_proxies)} 个节点已更新")
+            _ok(f"Total {len(all_new_proxies)} nodes updated")
 
     elif action == "list":
         subs = load_subscriptions()
         sub_list = subs.get("subscriptions", [])
         if not sub_list:
-            _print("\n  没有订阅\n")
+            _print("\n  No subscriptions\n")
             return
         _print()
         for s in sub_list:
@@ -265,7 +265,7 @@ def cmd_sub(args: list[str]):
 
     elif action == "remove":
         if len(args) < 2:
-            _err("请提供订阅名称")
+            _err("Please provide subscription name")
             return
         name = args[1]
         subs = load_subscriptions()
@@ -273,11 +273,11 @@ def cmd_sub(args: list[str]):
         before = len(sub_list)
         sub_list = [s for s in sub_list if s.get("name") != name]
         if len(sub_list) == before:
-            _err(f"未找到订阅: {name}")
+            _err(f"Subscription not found: {name}")
             return
         subs["subscriptions"] = sub_list
         save_subscriptions(subs)
-        _ok(f"已删除订阅: {name}")
+        _ok(f"Deleted subscription: {name}")
 
 
 def cmd_node(args: list[str]):
@@ -292,13 +292,13 @@ def cmd_node(args: list[str]):
                 if g.is_group:
                     _print(f"  {C_BOLD}{g.name}{C_RESET} ({g.group_type})")
                     if g.current:
-                        _print(f"    当前: {_green(g.current)}")
+                        _print(f"    Current: {_green(g.current)}")
                     for m in g.members:
                         marker = " →" if m == g.current else "  "
                         _print(f"    {marker} {m}")
                     _print()
         except Exception as e:
-            _err(f"获取节点失败: {e}")
+            _err(f"Failed to get nodes: {e}")
         return
 
     node_name = " ".join(args)
@@ -310,7 +310,7 @@ def cmd_node(args: list[str]):
         for g in groups:
             if g.is_group and node_name in g.members:
                 api.switch_proxy(g.name, node_name)
-                _ok(f"已切换到 {node_name} (组: {g.name})")
+                _ok(f"Switched to {node_name} (group: {g.name})")
                 found = True
                 break
 
@@ -318,17 +318,17 @@ def cmd_node(args: list[str]):
             # Try direct switch on GLOBAL group
             try:
                 api.switch_proxy("GLOBAL", node_name)
-                _ok(f"已切换到 {node_name}")
+                _ok(f"Switched to {node_name}")
             except Exception:
-                _err(f"未找到节点: {node_name}")
-                _info("用 clashctl /node 查看可用节点")
+                _err(f"Node not found: {node_name}")
+                _info("Use clashctl /node to view available nodes")
     except Exception as e:
-        _err(f"切换失败: {e}")
+        _err(f"Switch failed: {e}")
 
 
 def cmd_test(args: list[str]):
     """Speed test: /test [node_name]"""
-    _info("测速中...")
+    _info("Testing speed...")
     try:
         api = ClashAPI()
         cfg = load_config()
@@ -337,12 +337,12 @@ def cmd_test(args: list[str]):
         if args:
             node_name = " ".join(args)
             if node_name not in all_names:
-                _err(f"未找到节点: {node_name}")
+                _err(f"Node not found: {node_name}")
                 return
             test_names = [node_name]
         else:
             if not all_names:
-                _warn("没有节点可测试")
+                _warn("No nodes to test")
                 return
             test_names = all_names
 
@@ -361,16 +361,16 @@ def cmd_test(args: list[str]):
                 _print(f"  {_dim('○')} {node.name}: {_dim('untested')}")
         _print()
     except Exception as e:
-        _err(f"测速失败: {e}")
+        _err(f"Speed test failed: {e}")
 
 
 def cmd_restart():
     """Restart mihomo."""
-    _info("重启 mihomo...")
+    _info("Restarting mihomo...")
     if restart():
-        _ok("已重启")
+        _ok("Restarted")
     else:
-        _err("重启失败")
+        _err("Restart failed")
 
 def cmd_web(args: list[str]):
     """Start web UI."""
@@ -389,7 +389,7 @@ def cmd_web(args: list[str]):
             try:
                 port = int(arg)
             except ValueError:
-                _err(f"无效端口: {arg}")
+                _err(f"Invalid port: {arg}")
                 return
             i += 1
     from .web import run_server
@@ -400,21 +400,21 @@ def cmd_web(args: list[str]):
 def cmd_help():
     """Show help."""
     _print()
-    _print(f"  {C_BOLD}clashctl{C_RESET} — qubes-clash-gateway 控制器")
+    _print(f"  {C_BOLD}clashctl{C_RESET} — qubes-clash-gateway controller")
     _print(f"  {'─' * 40}")
-    _print(f"  /status              查看状态")
-    _print(f"  /mode global|rule|direct  切换模式")
-    _print(f"  /sub add <url>       添加订阅")
-    _print(f"  /sub update          更新所有订阅")
-    _print(f"  /sub list            列出订阅")
-    _print(f"  /sub remove <name>   删除订阅")
-    _print(f"  /node                列出所有节点")
-    _print(f"  /node <name>         选择节点")
-    _print(f"  /test [node]         测速")
-    _print(f"  /dns fake-ip|redir-host  切换 DNS 模式")
-    _print(f"  /restart             重启 mihomo")
-    _print(f"  /help                显示帮助")
-    _print(f"  /web [port]          启动 Web UI (默认 9091)")
+    _print(f"  /status              Show status")
+    _print(f"  /mode global|rule|direct  Switch mode")
+    _print(f"  /sub add <url>       Add subscription")
+    _print(f"  /sub update          Update all subscriptions")
+    _print(f"  /sub list            List subscriptions")
+    _print(f"  /sub remove <name>   Remove subscription")
+    _print(f"  /node                List all nodes")
+    _print(f"  /node <name>         Select node")
+    _print(f"  /test [node]         Speed test")
+    _print(f"  /dns fake-ip|redir-host  Switch DNS mode")
+    _print(f"  /restart             Restart mihomo")
+    _print(f"  /help                Show help")
+    _print(f"  /web [port]          Start Web UI (default 9091)")
     _print(f"  {'─' * 40}")
     _print(f"  {C_DIM}alias: /s=/status /m=/mode /n=/node /t=/test{C_RESET}")
     _print()
@@ -462,12 +462,12 @@ def main():
         cmd_test(args[1:])
     elif cmd in ("/dns", "dns"):
         if len(args) < 2:
-            _print(f"\n  用法: clashctl /dns fake-ip|redir-host\n")
+            _print(f"\n  Usage: clashctl /dns fake-ip|redir-host\n")
         else:
             if apply_dns_preset(args[1]):
-                _ok(f"DNS 已切换到 {args[1]}")
+                _ok(f"DNS switched to {args[1]}")
             else:
-                _err(f"无效 DNS 模式: {args[1]}")
+                _err(f"Invalid DNS mode: {args[1]}")
     elif cmd in ("/restart", "restart"):
         cmd_restart()
     elif cmd in ("/web", "web"):
@@ -475,5 +475,5 @@ def main():
     elif cmd in ("/help", "help", "--help", "-h"):
         cmd_help()
     else:
-        _err(f"未知命令: {cmd}")
-        _info("用 clashctl /help 查看帮助")
+        _err(f"Unknown command: {cmd}")
+        _info("Use clashctl /help to view help")

@@ -1,6 +1,6 @@
 #!/bin/bash
-# qubes-clash-gateway 连通性测试脚本
-# 在 NetVM 上运行：测试代理是否正常工作
+# qubes-clash-gateway connectivity test script
+# Run on NetVM: test if proxy is working properly
 set -euo pipefail
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
@@ -12,44 +12,44 @@ PROXY="socks5h://127.0.0.1:7890"
 TIMEOUT=10
 
 echo ""
-echo "=== qubes-clash-gateway 连通性测试 ==="
+echo "=== qubes-clash-gateway Connectivity Test ==="
 echo ""
 
-# 1. 检查 mihomo 进程
-echo "1. 服务状态"
+# 1. Check mihomo process
+echo "1. Service Status"
 if systemctl is-active --quiet mihomo 2>/dev/null; then
-    pass "mihomo 服务运行中"
+    pass "mihomo service is running"
 else
-    fail "mihomo 服务未运行"
-    echo "     尝试: sudo systemctl start mihomo"
+    fail "mihomo service is not running"
+    echo "     Try: sudo systemctl start mihomo"
 fi
 
-# 2. 检查端口监听
+# 2. Check port listening
 echo ""
-echo "2. 端口监听"
+echo "2. Port Listening"
 if ss -tlnp | grep -q ":7890"; then
-    pass "代理端口 7890 已监听"
+    pass "Proxy port 7890 is listening"
 else
-    fail "代理端口 7890 未监听"
+    fail "Proxy port 7890 is not listening"
 fi
 if ss -ulnp | grep -q ":1053"; then
-    pass "DNS 端口 1053 已监听"
+    pass "DNS port 1053 is listening"
 else
-    fail "DNS 端口 1053 未监听"
+    fail "DNS port 1053 is not listening"
 fi
 
-# 3. TUN 接口
+# 3. TUN interface
 echo ""
-echo "3. TUN 接口"
+echo "3. TUN Interface"
 if ip link show Meta 2>/dev/null || ip link show tun0 2>/dev/null || ip link show mihomo 2>/dev/null; then
-    pass "TUN 接口存在"
+    pass "TUN interface exists"
 else
-    warn "未检测到 TUN 接口（可能使用其他名称）"
+    warn "TUN interface not detected (may use a different name)"
 fi
 
-# 4. 通过代理访问国内站点
+# 4. Direct connection test via proxy (domestic site)
 echo ""
-echo "4. 国内直连测试"
+echo "4. Domestic Direct Connection Test"
 code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout $TIMEOUT -x "$PROXY" "https://www.baidu.com" 2>/dev/null || echo "000")
 if [ "$code" = "200" ] || [ "$code" = "302" ]; then
     pass "baidu.com → HTTP $code"
@@ -57,9 +57,9 @@ else
     fail "baidu.com → HTTP $code"
 fi
 
-# 5. 通过代理访问国外站点
+# 5. Proxy forwarding test (overseas site)
 echo ""
-echo "5. 代理转发测试"
+echo "5. Proxy Forwarding Test"
 code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout $TIMEOUT -x "$PROXY" "https://www.google.com" 2>/dev/null || echo "000")
 if [ "$code" = "200" ] || [ "$code" = "302" ]; then
     pass "google.com → HTTP $code"
@@ -67,19 +67,19 @@ else
     fail "google.com → HTTP $code"
 fi
 
-# 6. 出口 IP
+# 6. Exit IP
 echo ""
-echo "6. 出口 IP"
-ip=$(curl -s --connect-timeout $TIMEOUT -x "$PROXY" "https://api.ipify.org" 2>/dev/null || echo "获取失败")
-if [ "$ip" != "获取失败" ] && [ -n "$ip" ]; then
-    pass "出口 IP: $ip"
+echo "6. Exit IP"
+ip=$(curl -s --connect-timeout $TIMEOUT -x "$PROXY" "https://api.ipify.org" 2>/dev/null || echo "Failed to retrieve")
+if [ "$ip" != "Failed to retrieve" ] && [ -n "$ip" ]; then
+    pass "Exit IP: $ip"
 else
-    fail "无法获取出口 IP"
+    fail "Unable to get exit IP"
 fi
 
-# 7. DNS 解析（fake-ip 测试）
+# 7. DNS resolution (fake-ip test)
 echo ""
-echo "7. DNS 解析"
+echo "7. DNS Resolution"
 dns_result=$(python3 -c '
 import socket
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -91,24 +91,24 @@ ip = ".".join(str(b) for b in r[-4:])
 print(ip)
 ' 2>/dev/null || echo "")
 if [ -n "$dns_result" ]; then
-    pass "DNS 解析: google.com → $dns_result"
+    pass "DNS resolution: google.com → $dns_result"
     if echo "$dns_result" | grep -q "^198\\.18\\."; then
-        pass "fake-ip 模式生效 (198.18.x.x)"
+        pass "fake-ip mode active (198.18.x.x)"
     else
-        warn "非 fake-ip 地址，可能使用 redir-host 模式"
+        warn "Not a fake-ip address, may be using redir-host mode"
     fi
 else
-    # fallback: 尝试 dig
+    # fallback: try dig
     dns_result=$(dig +short @127.0.0.1 -p 1053 google.com 2>/dev/null || echo "")
     if [ -n "$dns_result" ]; then
-        pass "DNS 解析: google.com → $dns_result"
+        pass "DNS resolution: google.com → $dns_result"
     else
-        fail "DNS 解析失败"
+        fail "DNS resolution failed"
     fi
 fi
 
 echo ""
-echo "=== 测试完成 ==="
+echo "=== Test Complete ==="
 echo ""
-echo "如果 AppVM 无法上网，请在 dom0 确认:"
+echo "If AppVM cannot access the internet, verify in dom0:"
 echo "  qvm-prefs <appvm-name> netvm $(hostname)"
