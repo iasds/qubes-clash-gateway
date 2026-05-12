@@ -4,7 +4,7 @@
 set -euo pipefail
 
 REPO_URL="https://github.com/iasds/qubes-clash-gateway.git"
-INSTALL_DIR="/opt/qubes-clash-gateway"
+INSTALL_DIR="$HOME/qubes-clash-gateway"
 GITHUB_REPO="MetaCubeX/mihomo"
 MIHOMO_BIN="/usr/local/bin/mihomo"
 CONFIG_DIR="/rw/config/clash"
@@ -162,48 +162,9 @@ info "sudoers configured (passwordless mihomo restart)"
 # ==================== 5. nftables Transparent Proxy Rules ====================
 step 5 "Configuring nftables transparent proxy"
 
-# Write persistent nftables script
+# Write persistent nftables script — copy from repo (single source of truth)
 NFT_SCRIPT="/rw/config/clash/nftables-proxy.sh"
-cat > "$NFT_SCRIPT" << 'NFTEOF'
-#!/bin/bash
-# qubes-clash-gateway nftables transparent proxy rules
-# Core idea: Disable mihomo's dns-hijack/auto-redirect, manually hijack AppVM traffic
-# This way mihomo's own DNS queries won't be hijacked back to TUN, fully resolving DNS loops
-
-set -euo pipefail
-
-DNS_PORT=1053    # mihomo DNS listen port
-TABLE_NAME="qcg_proxy"
-
-# Clean old rules
-nft delete table inet "$TABLE_NAME" 2>/dev/null || true
-
-nft add table inet "$TABLE_NAME"
-
-# ── Set: AppVM vif interfaces ──
-nft add set inet "$TABLE_NAME" vif_interfaces '{ type ifname; }'
-# Dynamically populate vif interfaces
-for iface in /sys/class/net/vif*; do
-    [ -d "$iface" ] && nft add element inet "$TABLE_NAME" vif_interfaces "{ $(basename $iface) }" 2>/dev/null || true
-done
-
-# ── Chain: AppVM traffic hijack ──
-nft add chain inet "$TABLE_NAME" appvm_prerouting '{ type nat hook prerouting priority -100; policy accept; }'
-
-# Only hijack traffic from AppVM interfaces
-nft add rule inet "$TABLE_NAME" appvm_prerouting iifname @vif_interfaces udp dport 53 \
-    redirect to :$DNS_PORT
-nft add rule inet "$TABLE_NAME" appvm_prerouting iifname @vif_interfaces tcp dport 53 \
-    redirect to :$DNS_PORT
-
-# ── Exclude proxy server IPs (avoid loops) ──
-# Users should configure in config.yaml route-exclude-address
-# Common private network ranges excluded here, proxy server IPs handled by mihomo TUN route-exclude-address
-
-echo "[✓] nftables transparent proxy rules loaded"
-echo "    DNS: AppVM:53 → localhost:${DNS_PORT}"
-echo "    TCP/UDP: Handled by mihomo TUN auto-route"
-NFTEOF
+cp "$INSTALL_DIR/config/nftables-proxy.sh" "$NFT_SCRIPT"
 chmod +x "$NFT_SCRIPT"
 
 # Load nftables rules
@@ -284,6 +245,19 @@ fi
 
 # Ensure clash config dir has correct ownership
 chown -R user:user /rw/config/clash/ 2>/dev/null || true
+
+# Recreate clashctl symlink (Qubes AppVMs don't persist /usr/local/lib/python3*/dist-packages/)
+INSTALL_DIR="/home/user/qubes-clash-gateway"
+SITE_PKG=$(python3 -c "import site; print(site.getsitepackages()[0])" 2>/dev/null)
+if [ -d "$INSTALL_DIR/clashctl" ] && [ -n "$SITE_PKG" ]; then
+    ln -sf "$INSTALL_DIR/clashctl" "$SITE_PKG/clashctl" 2>/dev/null || true
+fi
+
+# Sync nftables-proxy.sh from repo (single source of truth)
+if [ -f "$INSTALL_DIR/config/nftables-proxy.sh" ]; then
+    cp "$INSTALL_DIR/config/nftables-proxy.sh" /rw/config/clash/nftables-proxy.sh
+    chmod +x /rw/config/clash/nftables-proxy.sh
+fi
 
 # Start mihomo
 systemctl start mihomo 2>/dev/null || true
