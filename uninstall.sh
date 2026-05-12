@@ -48,7 +48,12 @@ fi
 nft delete table inet qcg_proxy 2>/dev/null || true
 nft delete table inet mihomo 2>/dev/null || true
 nft delete table inet clash 2>/dev/null || true
-info "Cleaned up nftables rules"
+
+# Clean up kill switch rules from qubes-firewall forward chain
+for handle in $(nft -a list chain ip qubes-firewall forward 2>/dev/null | grep -E "vif.*dport|vif.*icmp" | awk '{print $NF}'); do
+    nft delete rule ip qubes-firewall forward handle "$handle" 2>/dev/null || true
+done
+info "Cleaned up nftables rules (including kill switch)"
 
 # Clean up clashctl
 rm -f /usr/local/bin/clashctl
@@ -57,6 +62,13 @@ info "Cleaned up clashctl"
 # Clean up sudoers
 rm -f /etc/sudoers.d/clashctl
 info "Cleaned up sudoers"
+
+# Clean up VIF monitor systemd units
+systemctl disable --now qcg-vif-monitor.path 2>/dev/null || true
+rm -f /etc/systemd/system/qcg-vif-monitor.path
+rm -f /etc/systemd/system/qcg-vif-monitor.service
+systemctl daemon-reload 2>/dev/null || true
+info "Cleaned up VIF monitor"
 
 # Ask whether to delete config
 echo ""

@@ -110,9 +110,27 @@ Open `http://<netvm-ip>:9091` in browser, enter token to manage.
 bash scripts/test.sh
 
 # On AppVM
-curl -s https://api.ipify.org          # Exit IP
+python3 -c "import socket; print(socket.getaddrinfo('baidu.com', 80)[0][4])"
+# Expected: 198.18.x.x (fake-ip, DNS intercepted by mihomo)
+
+curl -s https://api.ipify.org          # Expected: proxy exit IP, NOT your real IP
 curl -s https://www.baidu.com          # Test direct connection
 curl -s https://www.google.com         # Test proxied connection
+ping -c 1 8.8.8.8                      # Expected: 100% loss (ICMP blocked by kill switch)
+```
+
+### Verify Kill Switch
+
+```bash
+# On NetVM — stop mihomo to simulate crash
+sudo systemctl stop mihomo
+
+# On AppVM — all traffic should fail (no fallback to direct)
+curl -s --max-time 8 https://api.ipify.org   # Expected: timeout
+python3 -c "import socket; socket.getaddrinfo('baidu.com', 80)"  # Expected: DNS failure
+
+# On NetVM — restart mihomo
+sudo systemctl start mihomo
 ```
 
 ## Persistence
@@ -122,9 +140,9 @@ Qubes AppVMs lose `/etc/` on reboot. These paths persist across restarts:
 | Path | Content |
 |------|---------|
 | `/rw/config/clash/` | Config files, rules, subscription data |
-| `/rw/config/rc.local` | Boot script (mihomo + nftables) |
+| `/rw/config/rc.local` | Boot script (mihomo + nftables + service file recreation) |
 | `/usr/local/bin/mihomo` | mihomo binary |
-| `/etc/systemd/system/mihomo.service` | systemd service |
+| `/etc/systemd/system/mihomo.service` | systemd service (**not persistent** — recreated by rc.local on boot) |
 | `/rw/config/qubes-firewall-user-script` | Auto-reload nftables on VM connect |
 
 ## Configuration
@@ -173,7 +191,8 @@ This will:
 - Remove `/usr/local/bin/mihomo`
 - Remove `/etc/sudoers.d/clashctl`
 - Clean boot config from `/rw/config/rc.local`
-- Remove nftables rules
+- Remove nftables rules (including kill switch from forward chain)
+- Remove VIF monitor systemd units
 
 Config files in `/rw/config/clash/` are preserved. Remove manually:
 
