@@ -114,6 +114,10 @@ else
     info "Config already exists, skipping"
 fi
 
+# Fix ownership — clashctl runs as user, needs write access
+chown -R user:user "$CONFIG_DIR"
+info "Config directory ownership set to user"
+
 # Install clashctl to PATH
 CLASHCTL_BIN="/usr/local/bin/clashctl"
 cat > "$CLASHCTL_BIN" << 'CLASHEOF'
