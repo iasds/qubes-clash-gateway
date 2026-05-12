@@ -20,6 +20,12 @@ AppVM → vif* interface → nftables redirect → mihomo (TUN stack)
                                            ├→ TCP  → :7892 (redir-port)
                                            └→ UDP  → :7893 (tproxy-port)
 
+Kill Switch (nftables forward chain):
+  ├→ ICMP from vif* → DROP (Clash doesn't handle ICMP)
+  ├→ vif* → mihomo ports (1053/7890/7892/7893/9090/9091) → ACCEPT
+  ├→ vif* → everything else → DROP (policy drop)
+  └→ If mihomo crashes → all AppVM traffic blocked, no fallback to direct
+
 mihomo routing rules:
   ├→ GeoIP/GeoSite matching → direct or proxy
   └→ Subscription-based node selection
@@ -33,6 +39,7 @@ Key design decisions (see `config/config.yaml`):
 ## Features
 
 - Transparent proxy for all TCP/UDP traffic from AppVMs
+- **Kill Switch** — if mihomo crashes, all AppVM traffic is blocked (no fallback to direct routing)
 - DNS fake-ip mode (198.18.x.x range) with configurable filters
 - GeoIP/GeoSite rule-based routing with external rule providers
 - Subscription parser (Clash YAML format, vmess/vless/ss/ssr/trojan/hy2/tuic/wireguard)

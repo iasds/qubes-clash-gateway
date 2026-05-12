@@ -154,12 +154,49 @@ setup_rclocal() {
     cat >> "$rclocal" << 'RCEOF'
 
 # === qubes-clash-gateway ===
-# Start mihomo transparent proxy
+# Recreate mihomo systemd service (Qubes AppVMs don't persist /etc/systemd)
+if [ ! -f /etc/systemd/system/mihomo.service ]; then
+    cat > /etc/systemd/system/mihomo.service << 'SVCEOF'
+[Unit]
+Description=mihomo Daemon, Another Clash Kernel.
+After=network.target NetworkManager.service systemd-networkd.service
+
+[Service]
+Type=simple
+LimitNPROC=500
+LimitNOFILE=1000000
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_TIME CAP_SYS_PTRACE CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SYS_TIME CAP_SYS_PTRACE CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE
+Restart=always
+RestartSec=10
+ExecStartPre=/usr/local/bin/mihomo -t -d /rw/config/clash
+ExecStart=/usr/local/bin/mihomo -d /rw/config/clash
+ExecReload=/bin/kill -HUP $MAINPID
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+    systemctl daemon-reload
+fi
+
+# Ensure clash config dir has correct ownership
+chown -R user:user /rw/config/clash/ 2>/dev/null || true
+
+# Start mihomo
 systemctl start mihomo 2>/dev/null || true
+sleep 2
+
+# Load nftables transparent proxy + Kill Switch rules
+bash /rw/config/clash/nftables-proxy.sh 2>/dev/null || true
 
 # Ensure vif interfaces are up
 for vif in /sys/class/net/vif*; do
     [ -d "$vif" ] && ip link set "$(basename $vif)" up 2>/dev/null
+done
+
+# Auto-add vif interfaces to nftables set (backup in case nftables-proxy.sh missed them)
+for vif in /sys/class/net/vif*; do
+    [ -d "$vif" ] && nft add element inet qcg_proxy vif_interfaces "{ $(basename $vif) }" 2>/dev/null
 done
 # === end qubes-clash-gateway ===
 RCEOF

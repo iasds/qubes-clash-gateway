@@ -40,11 +40,22 @@ nft add rule inet "$TABLE_NAME" appvm_prerouting iifname @vif_interfaces udp dpo
 nft add rule ip qubes custom-input iifgroup 2 tcp dport { 1053, 7890, 7892, 7893, 9090, 9091 } accept 2>/dev/null || true
 nft add rule ip qubes custom-input iifgroup 2 udp dport { 1053, 7890, 7892, 7893 } accept 2>/dev/null || true
 
-# ── Allow AppVM traffic forwarding (Qubes forward chain) ──
-nft add rule ip qubes custom-forward iifgroup 2 oifgroup 1 accept 2>/dev/null || true
-nft insert rule ip qubes-firewall forward iifname "vif*" accept 2>/dev/null || true
+# ── Kill Switch: AppVM forwarding control (Qubes forward chain) ──
+# Remove old blanket "vif* accept" rules if present
+for handle in $(nft -a list chain ip qubes-firewall forward 2>/dev/null | grep "vif.*accept" | awk '{print $NF}'); do
+    nft delete rule ip qubes-firewall forward handle "$handle" 2>/dev/null || true
+done
 
-echo "[✓] nftables transparent proxy rules loaded"
+# Allow sys-proxy own outbound (non-vif interfaces)
+nft insert rule ip qubes-firewall forward iifname != "vif*" accept 2>/dev/null || true
+# Only allow AppVM traffic to mihomo ports — everything else dropped by policy drop
+nft insert rule ip qubes-firewall forward iifname "vif*" tcp dport { 1053, 7890, 7892, 7893, 9090, 9091 } accept 2>/dev/null || true
+nft insert rule ip qubes-firewall forward iifname "vif*" udp dport { 1053, 7890, 7892, 7893 } accept 2>/dev/null || true
+# Block ICMP (Clash doesn't handle ICMP — allowing it = leak)
+nft insert rule ip qubes-firewall forward iifname "vif*" ip protocol icmp drop 2>/dev/null || true
+
+echo "[✓] nftables transparent proxy + Kill Switch loaded"
 echo "    DNS: AppVM:53 → localhost:${DNS_PORT}"
 echo "    TCP: AppVM:* → localhost:${REDIR_PORT} (redir-port)"
 echo "    UDP: AppVM:* → localhost:${TPROXY_PORT} (tproxy-port)"
+echo "    Kill Switch: ICMP blocked, only mihomo ports forwarded"
