@@ -244,6 +244,11 @@ mihomo's `auto-redirect` creates nftables rules that hijack ALL traffic, includi
 
 When an AppVM starts, Qubes creates a `vif*` interface on the NetVM. Our `qcg-vif-monitor.path` systemd unit watches `/sys/class/net` for changes and reloads nftables rules to include new interfaces. The `qubes-firewall-user-script` also triggers a reload when VMs connect.
 
+
+## 社区
+
+[Qubes OS 中文社区](https://t.me/qubeszh) — Telegram 群组，欢迎加入交流。
+
 ## License
 
 MIT
