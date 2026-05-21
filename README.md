@@ -248,7 +248,7 @@ When an AppVM starts, Qubes creates a `vif*` interface on the NetVM. Our `qcg-vi
 ## Community
 
 [Qubes OS Chinese Community](https://t.me/qubeszh) — Telegram group.
-If you like this project, [buy the developer a coffee ☕](https://t.me/calalaq) or support with tokens!
+If you like this project, [buy the developer a coffee ☕](https://t.me/calalaq) or support with LLM tokens!
 
 ## License
 
