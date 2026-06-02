@@ -17,7 +17,7 @@ import json
 import urllib.request
 import urllib.error
 import re
-from typing import Optional
+from typing import Optional, List
 from urllib.parse import urlparse, parse_qs, unquote
 
 
@@ -112,9 +112,21 @@ def _parse_ss(uri: str) -> Optional[dict]:
         name = ""
 
         # SIP002 format: ss://base64(method:password)@server:port#name
-        if "@" in body and not body.startswith("YW"):
-            # Likely SIP002
-            userinfo, serverinfo = body.split("@", 1)
+        # Distinguish from standard format: ss://base64(method:password@server:port)#name
+        # SIP002 has @ separating userinfo from serverinfo in the raw URI
+        # Standard format has @ inside the base64-encoded part
+        is_sip002 = False
+        if "@" in body:
+            parts = body.split("@", 1)
+            if len(parts) == 2:
+                userinfo_candidate, serverinfo_candidate = parts
+                # Validate: serverinfo should look like host:port
+                if ":" in serverinfo_candidate and not serverinfo_candidate.startswith(":"):
+                    is_sip002 = True
+                    userinfo = userinfo_candidate
+                    serverinfo = serverinfo_candidate
+
+        if is_sip002:
             if "#" in serverinfo:
                 serverinfo, name = serverinfo.split("#", 1)
                 name = unquote(name)
@@ -426,7 +438,7 @@ def parse_uri(uri: str) -> Optional[dict]:
     return None
 
 
-def parse_subscription_text(text: str) -> list[dict]:
+def parse_subscription_text(text: str) -> List[dict]:
     """Parse subscription text (could be Clash YAML, base64 URIs, or raw URIs)."""
     text = text.strip()
     if not text:
@@ -460,7 +472,7 @@ def parse_subscription_text(text: str) -> list[dict]:
     return proxies
 
 
-def parse_subscription(url: str) -> list[dict]:
+def parse_subscription(url: str) -> List[dict]:
     """Fetch and parse a subscription URL."""
     text = fetch_subscription(url)
     return parse_subscription_text(text)

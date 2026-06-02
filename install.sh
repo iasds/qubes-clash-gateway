@@ -5,10 +5,18 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "${SCRIPT_DIR}/scripts/lib.sh"
+
 CONFIG_DIR="/rw/config/clash"
 MIHOMO_BIN="/usr/local/bin/mihomo"
 SERVICE_NAME="mihomo"
 GITHUB_REPO="MetaCubeX/mihomo"
+
+# Validate environment
+require_root
+require_cmd curl "sudo apt install curl"
+require_cmd python3 "sudo apt install python3"
+require_cmd systemctl "systemd required"
 
 # Colors
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'

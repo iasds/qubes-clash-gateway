@@ -29,3 +29,8 @@ config/geoip.metadb
 config/GeoSite.dat
 config/*.bak
 config/rules/
+.coverage
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/

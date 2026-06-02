@@ -250,6 +250,16 @@ When an AppVM starts, Qubes creates a `vif*` interface on the NetVM. Our `qcg-vi
 [Qubes OS Chinese Community](https://t.me/qubeszh) — Telegram group.
 If you like this project, [buy the developer a coffee ☕](https://t.me/calalaq) or support with LLM tokens!
 
+## Contributing
+
+See [docs/contributing.md](docs/contributing.md) for dev setup, testing, and PR guidelines.
+
+### Developer Documentation
+
+- [Architecture](docs/architecture.md) — System design, data flow, Kill Switch mechanism
+- [nftables Rules](docs/nftables-rules.md) — Every rule documented with security rationale
+- [clashctl API](docs/clashctl-api.md) — CLI command reference with examples
+
 ## License
 
 MIT

@@ -6,6 +6,9 @@
 set -euo pipefail
 export PATH=$PATH:/usr/sbin
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "${SCRIPT_DIR}/../scripts/lib.sh"
+
 DNS_PORT=1053      # mihomo DNS listen port
 REDIR_PORT=7892    # mihomo redir-port (TCP transparent proxy)
 TPROXY_PORT=7893   # mihomo tproxy-port (UDP transparent proxy)
@@ -41,8 +44,9 @@ nft add rule ip qubes custom-input iifgroup 2 tcp dport { 1053, 7890, 7892, 7893
 nft add rule ip qubes custom-input iifgroup 2 udp dport { 1053, 7890, 7892, 7893 } accept 2>/dev/null || true
 
 # ── Kill Switch: AppVM forwarding control (Qubes forward chain) ──
-# Remove old blanket "vif* accept" rules if present
-for handle in $(nft -a list chain ip qubes-firewall forward 2>/dev/null | grep "vif.*accept" | awk '{print $NF}'); do
+# Flush all QCG-added rules first (idempotent: no duplicates on re-run)
+# Remove old rules by matching our specific patterns
+for handle in $(nft -a list chain ip qubes-firewall forward 2>/dev/null | grep -E "vif.*accept|vif.*icmp.*drop|iifname != \"vif\".*accept" | awk '{print $NF}'); do
     nft delete rule ip qubes-firewall forward handle "$handle" 2>/dev/null || true
 done
 

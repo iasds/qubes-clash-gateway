@@ -13,6 +13,7 @@ Usage:
 
 import sys
 from datetime import datetime
+from typing import List
 
 from .config import C_GREEN, C_RED, C_YELLOW, C_CYAN, C_DIM, C_BOLD, C_RESET
 from .data import (
@@ -31,23 +32,23 @@ from .i18n import t
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 
-def _print(s: str = ""):
+def _print(s: str = "") -> None:
     print(s)
 
 
-def _ok(s: str):
+def _ok(s: str) -> None:
     print(f"{C_GREEN}✓{C_RESET} {s}")
 
 
-def _err(s: str):
+def _err(s: str) -> None:
     print(f"{C_RED}✗{C_RESET} {s}")
 
 
-def _warn(s: str):
+def _warn(s: str) -> None:
     print(f"{C_YELLOW}!{C_RESET} {s}")
 
 
-def _info(s: str):
+def _info(s: str) -> None:
     print(f"{C_CYAN}→{C_RESET} {s}")
 
 
@@ -77,7 +78,7 @@ def _mode_color(mode: str) -> str:
 
 # ── Commands ──────────────────────────────────────────────────────────────
 
-def cmd_status():
+def cmd_status() -> None:
     """Show current status."""
     running = is_running()
     mode = detect_current_mode()
@@ -142,7 +143,7 @@ def cmd_status():
     _print()
 
 
-def cmd_mode(args: list[str]):
+def cmd_mode(args: List[str]) -> None:
     """Switch proxy mode: /mode global|rule|direct"""
     if not args:
         mode = detect_current_mode()
@@ -161,7 +162,7 @@ def cmd_mode(args: list[str]):
         _err("Switch failed")
 
 
-def cmd_sub(args: list[str]):
+def cmd_sub(args: List[str]) -> None:
     """Subscription management: /sub add|update|list"""
     if not args:
         _print("\n  Usage:")
@@ -280,7 +281,7 @@ def cmd_sub(args: list[str]):
         _ok(f"Deleted subscription: {name}")
 
 
-def cmd_node(args: list[str]):
+def cmd_node(args: List[str]) -> None:
     """Select node: /node <name>"""
     if not args:
         # List available nodes
@@ -326,7 +327,7 @@ def cmd_node(args: list[str]):
         _err(f"Switch failed: {e}")
 
 
-def cmd_test(args: list[str]):
+def cmd_test(args: List[str]) -> None:
     """Speed test: /test [node_name]"""
     _info("Testing speed...")
     try:
@@ -364,7 +365,7 @@ def cmd_test(args: list[str]):
         _err(f"Speed test failed: {e}")
 
 
-def cmd_restart():
+def cmd_restart() -> None:
     """Restart mihomo."""
     _info("Restarting mihomo...")
     if restart():
@@ -372,7 +373,7 @@ def cmd_restart():
     else:
         _err("Restart failed")
 
-def cmd_web(args: list[str]):
+def cmd_web(args: List[str]) -> None:
     """Start web UI."""
     port = 9091
     secret = ""
@@ -397,7 +398,7 @@ def cmd_web(args: list[str]):
 
 
 
-def cmd_help():
+def cmd_help() -> None:
     """Show help."""
     _print()
     _print(f"  {C_BOLD}clashctl{C_RESET} — qubes-clash-gateway controller")
@@ -435,7 +436,7 @@ ALIASES = {
 
 # ── Main entry point ──────────────────────────────────────────────────────
 
-def main():
+def main() -> None:
     """CLI entry point."""
     args = sys.argv[1:]
 

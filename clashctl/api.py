@@ -10,7 +10,7 @@ import json
 import urllib.request
 import urllib.error
 import urllib.parse
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from .config import API_BASE, API_PORT, API_SECRET
 
@@ -60,7 +60,7 @@ class ClashAPI:
         if params:
             url += "?" + urllib.parse.urlencode(params)
 
-        headers: dict[str, str] = {"Content-Type": "application/json"}
+        headers: Dict[str, str] = {"Content-Type": "application/json"}
         if self.secret:
             headers["Authorization"] = f"Bearer {self.secret}"
 
@@ -132,7 +132,7 @@ class ClashAPI:
             "find_process_mode": "find-process-mode",
             "global_client_fingerprint": "global-client-fingerprint",
         }
-        body: dict[str, Any] = {}
+        body: Dict[str, Any] = {}
         for key, val in kwargs.items():
             body[mapping.get(key, key)] = val
         self._patch("/configs", body=body)
@@ -216,7 +216,7 @@ class ClashAPI:
         Returns a dict mapping node names to delay results.
         """
         # mihomo supports group-level delay test via PUT with empty body
-        result: dict[str, Any] = {}
+        result: Dict[str, Any] = {}
         proxies_info = self.get_proxy(group)
         members = proxies_info.get("all", proxies_info.get("now", []))
         # 'all' is the list of member names; 'now' is the currently selected

@@ -1,5 +1,6 @@
 """Constants and paths for clashctl"""
 import os
+from typing import Any, Dict, List, Optional
 
 # Paths (Qubes persistent storage)
 CLASH_DIR = "/rw/config/clash"
@@ -13,7 +14,7 @@ RULE_PROVIDERS_DIR = os.path.join(CLASH_DIR, "rule-providers")
 API_BASE = "http://127.0.0.1"
 API_PORT = 9090
 
-def _read_mihomo_secret():
+def _read_mihomo_secret() -> str:
     """Read API secret from mihomo config.yaml if present."""
     try:
         import yaml

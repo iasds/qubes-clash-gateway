@@ -15,7 +15,7 @@ import urllib.request
 import urllib.error
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .config import SPEEDTEST_TIMEOUT, SPEEDTEST_WORKERS, C_GREEN, C_RED, C_GRAY, C_RESET, C_DIM
 from .i18n import t
@@ -42,8 +42,8 @@ class NodeInfo:
     is_group: bool = False            # True if this is a proxy-group entry
     group_type: str = ""              # urltest, fallback, select, ...
     current: str = ""                 # currently selected member (for groups)
-    members: list = field(default_factory=list)  # member names (for groups)
-    extra: dict = field(default_factory=dict)    # raw proxy config dict
+    members: List[str] = field(default_factory=list)  # member names (for groups)
+    extra: Dict[str, Any] = field(default_factory=dict)  # raw proxy config dict
 
     @property
     def reachable(self) -> bool:
@@ -62,7 +62,7 @@ _GROUP_TYPES = frozenset({"Selector", "URLTest", "Fallback", "LoadBalance",
                           "Relay", "Compatible", "Fallback-UD"})
 
 
-def parse_nodes(api) -> list[NodeInfo]:
+def parse_nodes(api: Any) -> List[NodeInfo]:
     """Fetch all proxies from the mihomo API and return a list of NodeInfo.
 
     Args:
@@ -73,7 +73,7 @@ def parse_nodes(api) -> list[NodeInfo]:
     """
     data = api.get_proxies()
     raw = data.get("proxies", {})
-    nodes: list[NodeInfo] = []
+    nodes: List[NodeInfo] = []
 
     for name, info in raw.items():
         ptype = info.get("type", "unknown")
@@ -106,7 +106,7 @@ def parse_nodes(api) -> list[NodeInfo]:
     return nodes
 
 
-def get_group_nodes(api, group_name: str) -> list[NodeInfo]:
+def get_group_nodes(api: Any, group_name: str) -> List[NodeInfo]:
     """Get the member nodes of a specific proxy group.
 
     Args:
@@ -122,7 +122,7 @@ def get_group_nodes(api, group_name: str) -> list[NodeInfo]:
     group_info = raw.get(group_name, {})
     all_members = group_info.get("all", [])
 
-    nodes: list[NodeInfo] = []
+    nodes: List[NodeInfo] = []
     for member_name in all_members:
         if member_name in _VIRTUAL_NAMES:
             continue
@@ -141,7 +141,7 @@ def get_group_nodes(api, group_name: str) -> list[NodeInfo]:
     return nodes
 
 
-def get_proxy_groups(api) -> list[NodeInfo]:
+def get_proxy_groups(api: Any) -> List[NodeInfo]:
     """List all proxy groups (Selector, URLTest, Fallback, etc.).
 
     Args:
@@ -152,7 +152,7 @@ def get_proxy_groups(api) -> list[NodeInfo]:
     """
     data = api.get_proxies()
     raw = data.get("proxies", {})
-    groups: list[NodeInfo] = []
+    groups: List[NodeInfo] = []
 
     for name, info in raw.items():
         ptype = info.get("type", "unknown")
@@ -171,7 +171,7 @@ def get_proxy_groups(api) -> list[NodeInfo]:
     return groups
 
 
-def switch_node(api, group: str, node_name: str) -> None:
+def switch_node(api: Any, group: str, node_name: str) -> None:
     """Switch the selected proxy in a group.
 
     Args:
@@ -184,7 +184,7 @@ def switch_node(api, group: str, node_name: str) -> None:
 
 # ── Speed test ─────────────────────────────────────────────────────────
 
-def _test_single(api, name: str, url: str, timeout: int) -> tuple[str, int]:
+def _test_single(api: Any, name: str, url: str, timeout: int) -> Tuple[str, int]:
     """Test latency for one proxy node. Returns (name, delay_ms)."""
     try:
         result = api.proxy_delay(name, url=url, timeout=timeout * 1000)
@@ -194,13 +194,13 @@ def _test_single(api, name: str, url: str, timeout: int) -> tuple[str, int]:
 
 
 def speed_test(
-    api,
-    nodes: list[NodeInfo],
+    api: Any,
+    nodes: List[NodeInfo],
     url: str = "https://www.gstatic.com/generate_204",
     timeout: int = SPEEDTEST_TIMEOUT,
     workers: int = SPEEDTEST_WORKERS,
-    progress_callback=None,
-) -> list[NodeInfo]:
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+) -> List[NodeInfo]:
     """Run concurrent latency tests on a list of nodes.
 
     Args:
@@ -215,8 +215,8 @@ def speed_test(
         The same list with .delay populated.
     """
     # Build a mapping from node name → NodeInfo for quick lookup
-    name_map: dict[str, NodeInfo] = {}
-    test_names: list[str] = []
+    name_map: Dict[str, NodeInfo] = {}
+    test_names: List[str] = []
     for node in nodes:
         if node.is_group:
             continue
@@ -286,7 +286,7 @@ _EXIT_IP_URLS = [
 ]
 
 
-def _get_mihomo_proxy_handler(api=None):
+def _get_mihomo_proxy_handler(api: Optional[Any] = None) -> urllib.request.ProxyHandler:
     """Build a urllib ProxyHandler that routes through mihomo mixed-port."""
     if api is None:
         return urllib.request.ProxyHandler({})  # no proxy
@@ -299,7 +299,7 @@ def _get_mihomo_proxy_handler(api=None):
     return urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
 
 
-def get_exit_ip(api=None, timeout: int = 10) -> str:
+def get_exit_ip(api: Optional[Any] = None, timeout: int = 10) -> str:
     """Query the exit IP address through the mihomo proxy.
 
     Args:
@@ -325,7 +325,7 @@ def get_exit_ip(api=None, timeout: int = 10) -> str:
     return "Unknown"
 
 
-def geolocate_ip(ip: str = "", timeout: int = 10) -> dict:
+def geolocate_ip(ip: str = "", timeout: int = 10) -> Dict[str, Any]:
     """Get GeoIP information for an IP address.
 
     Args:
@@ -336,7 +336,7 @@ def geolocate_ip(ip: str = "", timeout: int = 10) -> dict:
         Dict with keys: ip, country, country_code, region, city, isp, org.
         All values default to "Unknown" on failure.
     """
-    result = {
+    result: Dict[str, Any] = {
         "ip": ip or "Unknown",
         "country": "Unknown",
         "country_code": "",
@@ -402,7 +402,7 @@ def geolocate_ip(ip: str = "", timeout: int = 10) -> dict:
     return result
 
 
-def get_exit_geo(api=None, timeout: int = 10) -> dict:
+def get_exit_geo(api: Optional[Any] = None, timeout: int = 10) -> Dict[str, Any]:
     """Get the geolocation of the current exit IP.
 
     Convenience function combining get_exit_ip() + geolocate_ip().
@@ -457,7 +457,7 @@ def group_summary(group: NodeInfo) -> str:
     return " ".join(parts)
 
 
-def geo_summary(geo: dict) -> str:
+def geo_summary(geo: Dict[str, Any]) -> str:
     """Format GeoIP dict into a readable one-liner."""
     parts = []
     ip = geo.get("ip", "Unknown")

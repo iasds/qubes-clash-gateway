@@ -7,7 +7,7 @@ import os
 import subprocess
 import urllib.request
 import urllib.error
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from .config import (
     CONFIG_YAML,
@@ -36,12 +36,12 @@ def _api() -> ClashAPI:
     return ClashAPI()
 
 
-def _get_proxies_list(cfg: dict) -> list[str]:
+def _get_proxies_list(cfg: dict) -> List[str]:
     """Extract all proxy node names from the config."""
     return [p.get("name", "") for p in cfg.get("proxies", []) if p.get("name")]
 
 
-def _make_auto_group(proxies_list: list[str]) -> dict:
+def _make_auto_group(proxies_list: List[str]) -> dict:
     """Create a urltest auto proxy-group."""
     return {
         "name": "auto",
@@ -53,7 +53,7 @@ def _make_auto_group(proxies_list: list[str]) -> dict:
     }
 
 
-def _make_select_group(proxies_list: list[str]) -> dict:
+def _make_select_group(proxies_list: List[str]) -> dict:
     """Create a select proxy-group with all nodes + auto."""
     return {
         "name": "GLOBAL",
@@ -291,7 +291,7 @@ def apply_dns_preset(preset_key: str) -> bool:
 
 # ── Custom rules ─────────────────────────────────────────────────────────────
 
-def load_custom_rules() -> list[dict]:
+def load_custom_rules() -> List[dict]:
     """Load custom rules from the persistent YAML file.
 
     Each entry is a dict with keys: 'type', 'payload', 'target'.
@@ -303,7 +303,7 @@ def load_custom_rules() -> list[dict]:
     return rules
 
 
-def _save_custom_rules(rules: list[dict]) -> None:
+def _save_custom_rules(rules: List[dict]) -> None:
     """Persist custom rules to the YAML file."""
     save_yaml(CUSTOM_RULES_YAML, rules)
 
@@ -348,7 +348,7 @@ def remove_custom_rule(rule_type: str, payload: str) -> bool:
 # ── Full config generation ───────────────────────────────────────────────────
 
 def generate_full_config(
-    proxies: Optional[list[dict]] = None,
+    proxies: Optional[List[dict]] = None,
     mode: str = "rule",
     rule_preset: str = "smart-split",
     dns_preset: str = "fake-ip",
@@ -423,7 +423,7 @@ def generate_full_config(
     return cfg
 
 
-def apply_full_config(proxies: Optional[list[dict]] = None, **kwargs) -> bool:
+def apply_full_config(proxies: Optional[List[dict]] = None, **kwargs: Any) -> bool:
     """Generate, save, and apply a full mihomo config.
 
     Accepts the same keyword arguments as generate_full_config().

@@ -2,13 +2,14 @@
 import json
 import os
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
 from .config import (
     PREFERENCES_JSON, SUBSCRIPTIONS_JSON, CONFIG_YAML,
     DEFAULT_SPEEDTEST_URL, DEFAULT_UPDATE_INTERVAL_HOURS,
 )
 
 
-def load_json(path, default=None):
+def load_json(path: str, default: Optional[Any] = None) -> Any:
     try:
         with open(path, encoding="utf-8") as f:
             return json.load(f)
@@ -16,7 +17,7 @@ def load_json(path, default=None):
         return default if default is not None else {}
 
 
-def save_json(path, data):
+def save_json(path: str, data: Any) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
@@ -24,7 +25,7 @@ def save_json(path, data):
     os.replace(tmp, path)
 
 
-def load_yaml(path, default=None):
+def load_yaml(path: str, default: Optional[Any] = None) -> Any:
     """Load YAML config (requires pyyaml)"""
     try:
         import yaml
@@ -34,7 +35,7 @@ def load_yaml(path, default=None):
         return default if default is not None else {}
 
 
-def save_yaml(path, data):
+def save_yaml(path: str, data: Any) -> None:
     """Save YAML config (requires pyyaml)"""
     try:
         import yaml
@@ -47,7 +48,7 @@ def save_yaml(path, data):
     os.replace(tmp, path)
 
 
-def load_preferences():
+def load_preferences() -> Dict[str, Any]:
     defaults = {
         "mode": "rule",
         "rule_preset": "smart-split",
@@ -66,27 +67,27 @@ def load_preferences():
     return prefs
 
 
-def save_preferences(prefs):
+def save_preferences(prefs: Dict[str, Any]) -> None:
     save_json(PREFERENCES_JSON, prefs)
 
 
-def load_config():
+def load_config() -> Any:
     return load_yaml(CONFIG_YAML, {})
 
 
-def save_config(config):
+def save_config(config: Any) -> None:
     save_yaml(CONFIG_YAML, config)
 
 
-def load_subscriptions():
+def load_subscriptions() -> Dict[str, Any]:
     return load_json(SUBSCRIPTIONS_JSON, {"subscriptions": []})
 
 
-def save_subscriptions(subs):
+def save_subscriptions(subs: Dict[str, Any]) -> None:
     save_json(SUBSCRIPTIONS_JSON, subs)
 
 
-def time_ago(iso_str):
+def time_ago(iso_str: Optional[str]) -> str:
     if not iso_str:
         return "never"
     try:
@@ -104,7 +105,7 @@ def time_ago(iso_str):
         return "unknown"
 
 
-def uptime_str(secs):
+def uptime_str(secs: int) -> str:
     if secs < 0:
         return "N/A"
     h, m = divmod(secs // 60, 60)

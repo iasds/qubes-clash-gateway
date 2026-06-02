@@ -17,7 +17,7 @@ import signal
 import sys
 import time
 import syslog
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from .config import SPEEDTEST_TIMEOUT
 from .api import ClashAPI, ClashAPIError
@@ -39,7 +39,7 @@ API_UNREACHABLE_THRESHOLD = 3  # consecutive API failures before restart
 
 _running = True
 _api_fail_count = 0         # consecutive API connection failures
-_node_failures: dict[str, int] = {}  # node_name -> consecutive failure count
+_node_failures: Dict[str, int] = {}  # node_name -> consecutive failure count
 
 
 # ── Logging ──────────────────────────────────────────────────────────────────
@@ -52,7 +52,7 @@ def log(msg: str) -> None:
 
 # ── Signal handling ──────────────────────────────────────────────────────────
 
-def signal_handler(sig: int, frame) -> None:
+def signal_handler(sig: int, frame: Any) -> None:
     """Handle SIGTERM/SIGINT for graceful shutdown."""
     global _running
     log(f"Received signal {sig}, shutting down…")
@@ -66,7 +66,6 @@ def write_pid() -> None:
     with open(PID_FILE, "w") as f:
         f.write(str(os.getpid()))
 
-
 def cleanup_pid() -> None:
     """Remove the PID file on exit."""
     try:
@@ -77,7 +76,7 @@ def cleanup_pid() -> None:
 
 # ── Proxy node operations ───────────────────────────────────────────────────
 
-def get_proxy_nodes(api: ClashAPI) -> list[str]:
+def get_proxy_nodes(api: ClashAPI) -> List[str]:
     """Get all individual proxy node names from the API.
 
     Filters out proxy groups, DIRECT, REJECT, and GLOBAL.
@@ -90,7 +89,7 @@ def get_proxy_nodes(api: ClashAPI) -> list[str]:
         return []
 
     proxies = proxies_data.get("proxies", {})
-    nodes: list[str] = []
+    nodes: List[str] = []
 
     for name, info in proxies.items():
         # Skip proxy groups (they have 'type' like 'Selector', 'URLTest', etc.)
@@ -105,13 +104,12 @@ def get_proxy_nodes(api: ClashAPI) -> list[str]:
 
     return nodes
 
-
-def check_all_nodes(api: ClashAPI, nodes: list[str]) -> dict[str, Optional[int]]:
+def check_all_nodes(api: ClashAPI, nodes: List[str]) -> Dict[str, Optional[int]]:
     """Check latency for all nodes via the API delay endpoint.
 
     Returns a dict mapping node name to delay (ms), or None/0 on failure.
     """
-    results: dict[str, Optional[int]] = {}
+    results: Dict[str, Optional[int]] = {}
     timeout_ms = NODE_TIMEOUT * 1000
 
     for node in nodes:

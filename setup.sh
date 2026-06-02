@@ -3,6 +3,9 @@
 # Turns a Qubes NetVM into a transparent proxy gateway, AppVMs use proxy with zero config
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "${SCRIPT_DIR}/scripts/lib.sh"
+
 REPO_URL="https://github.com/iasds/qubes-clash-gateway.git"
 INSTALL_DIR="$HOME/qubes-clash-gateway"
 GITHUB_REPO="MetaCubeX/mihomo"
@@ -12,35 +15,33 @@ DNS_PORT=1053           # mihomo DNS listen port (avoid port 53 to prevent loop)
 API_PORT=9090           # mihomo external control port
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
-info()  { echo -e "${GREEN}[✓]${NC} $*"; }
-warn()  { echo -e "${YELLOW}[!]${NC} $*"; }
-error() { echo -e "${RED}[✗]${NC} $*"; exit 1; }
 step()  { echo -e "\n${CYAN}[$1/$TOTAL_STEPS]${NC} $2"; }
 
 TOTAL_STEPS=6
 
 # ==================== 1. Environment Check ====================
 step 1 "Checking environment"
-[ "$(id -u)" -eq 0 ] || error "Please run this script with sudo"
-command -v git >/dev/null || error "git is required (apt install git)"
-command -v curl >/dev/null || error "curl is required (apt install curl)"
-command -v python3 >/dev/null || error "python3 is required (apt install python3)"
-command -v nft >/dev/null || error "nftables is required (apt install nftables)"
-info "Environment check passed"
+require_root
+require_cmd git "sudo apt install git"
+require_cmd curl "sudo apt install curl"
+require_cmd python3 "sudo apt install python3"
+require_cmd nft "sudo apt install nftables"
+require_cmd systemctl "systemd required"
+log_info "Environment check passed"
 
 # ==================== 2. Clone/Update Repository ====================
 step 2 "Fetching project code"
 if [ -d "$INSTALL_DIR/.git" ]; then
-    info "Updating existing installation: $INSTALL_DIR"
+    log_info "Updating existing installation: $INSTALL_DIR"
     cd "$INSTALL_DIR"
-    git pull --ff-only 2>/dev/null || warn "git pull failed, using existing code"
+    git pull --ff-only 2>/dev/null || log_warn "git pull failed, using existing code"
 else
-    info "Cloning repository to $INSTALL_DIR"
+    log_info "Cloning repository to $INSTALL_DIR"
     git clone "$REPO_URL" "$INSTALL_DIR" 2>/dev/null || {
-        warn "git clone failed, trying zip download..."
+        log_warn "git clone failed, trying zip download..."
         curl -fSL -o /tmp/qcg.zip \
             "https://github.com/iasds/qubes-clash-gateway/archive/refs/heads/master.zip" \
-            --connect-timeout 15 || error "Download failed. Please ensure git credentials are configured or clone manually."
+            --connect-timeout 15 || log_error "Download failed. Please ensure git credentials are configured or clone manually."
         mkdir -p "$INSTALL_DIR"
         unzip -qo /tmp/qcg.zip -d /tmp/qcg-extract
         cp -r /tmp/qcg-extract/qubes-clash-gateway-master/* "$INSTALL_DIR/"
@@ -49,13 +50,32 @@ else
         git init && git add -A && git commit -m "initial" 2>/dev/null || true
     }
 fi
-info "Code ready: $INSTALL_DIR"
+log_info "Code ready: $INSTALL_DIR"
 
 # ==================== 3. Download mihomo ====================
 step 3 "Downloading mihomo"
+
+# Detect architecture
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64)  MIHOMO_ARCH="amd64" ;;
+    aarch64) MIHOMO_ARCH="arm64" ;;
+    armv7l)  MIHOMO_ARCH="armv7" ;;
+    *)       log_error "Unsupported architecture: $ARCH"; exit 1 ;;
+esac
+log_info "Detected architecture: $ARCH → mihomo $MIHOMO_ARCH"
+
 if [ -f "$MIHOMO_BIN" ]; then
-    info "mihomo already exists: $MIHOMO_BIN"
-else
+    # Validate existing binary
+    if "$MIHOMO_BIN" -v &>/dev/null; then
+        log_info "mihomo already installed and valid: $MIHOMO_BIN"
+    else
+        log_warn "mihomo binary exists but invalid, re-downloading"
+        rm -f "$MIHOMO_BIN"
+    fi
+fi
+
+if [ ! -f "$MIHOMO_BIN" ]; then
     DOWNLOADED=0
     for candidate in /tmp/mihomo /tmp/mihomo.gz "$INSTALL_DIR/mihomo" "$INSTALL_DIR/mihomo.gz"; do
         if [ -f "$candidate" ]; then
@@ -65,14 +85,14 @@ else
                 cp "$candidate" "$MIHOMO_BIN"
             fi
             chmod +x "$MIHOMO_BIN"
-            info "Installed from local: $candidate"
+            log_info "Installed from local: $candidate"
             DOWNLOADED=1
             break
         fi
     done
 
     if [ "$DOWNLOADED" -eq 0 ]; then
-        info "Downloading from GitHub..."
+        log_info "Downloading from GitHub ($MIHOMO_ARCH)..."
         local_url=$(curl -sf --connect-timeout 10 \
             "https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=5" | \
             python3 -c "
@@ -81,7 +101,7 @@ try:
     for r in json.load(sys.stdin):
         for a in r.get('assets', []):
             n = a['name'].lower()
-            if 'linux' in n and 'amd64' in n and n.endswith('.gz'):
+            if 'linux' in n and '${MIHOMO_ARCH}' in n and n.endswith('.gz'):
                 print(a['browser_download_url']); sys.exit(0)
 except: pass
 " 2>/dev/null) || true
@@ -91,12 +111,18 @@ except: pass
                 gunzip -c /tmp/mihomo.gz > "$MIHOMO_BIN"
                 chmod +x "$MIHOMO_BIN"
                 rm -f /tmp/mihomo.gz
-                info "Download complete"
+                log_info "Download complete"
             else
-                error "Download failed. Please manually download mihomo to /tmp/mihomo.gz:\n  https://github.com/MetaCubeX/mihomo/releases\n  Select the linux-amd64 .gz file"
+                log_error "Download failed. Please manually download mihomo to /tmp/mihomo.gz:"
+                echo "  https://github.com/MetaCubeX/mihomo/releases" >&2
+                echo "  Select the linux-${MIHOMO_ARCH} .gz file" >&2
+                exit 1
             fi
         else
-            error "Unable to get download link. Please download manually:\n  https://github.com/MetaCubeX/mihomo/releases\n  Select the linux-amd64 .gz file, place at /tmp/mihomo.gz"
+            log_error "Unable to get download link. Please download manually:"
+            echo "  https://github.com/MetaCubeX/mihomo/releases" >&2
+            echo "  Select the linux-${MIHOMO_ARCH} .gz file, place at /tmp/mihomo.gz" >&2
+            exit 1
         fi
     fi
 fi
@@ -108,15 +134,15 @@ mkdir -p "$CONFIG_DIR"
 
 if [ ! -f "$CONFIG_DIR/config.yaml" ]; then
     cp "$INSTALL_DIR/config/config.yaml" "$CONFIG_DIR/config.yaml"
-    info "Config template copied to $CONFIG_DIR/config.yaml"
-    warn "Please edit $CONFIG_DIR/config.yaml to add proxy nodes, then restart the service"
+    log_info "Config template copied to $CONFIG_DIR/config.yaml"
+    log_warn "Please edit $CONFIG_DIR/config.yaml to add proxy nodes, then restart the service"
 else
-    info "Config already exists, skipping"
+    log_info "Config already exists, skipping"
 fi
 
 # Fix ownership — clashctl runs as user, needs write access
 chown -R user:user "$CONFIG_DIR"
-info "Config directory ownership set to user"
+log_info "Config directory ownership set to user"
 
 # Install clashctl to PATH
 CLASHCTL_BIN="/usr/local/bin/clashctl"
@@ -130,7 +156,7 @@ chmod +x "$CLASHCTL_BIN"
 if [ -d "$INSTALL_DIR/clashctl" ]; then
     ln -sf "$INSTALL_DIR/clashctl" "$(python3 -c 'import site; print(site.getsitepackages()[0])')/clashctl" 2>/dev/null || true
 fi
-info "clashctl installed"
+log_info "clashctl installed"
 
 # systemd service
 cat > /etc/systemd/system/mihomo.service << UNIT
@@ -151,13 +177,13 @@ UNIT
 
 systemctl daemon-reload
 systemctl enable mihomo
-info "systemd service created"
+log_info "systemd service created"
 
 # sudoers — allow passwordless mihomo restart for user
 SUDOERS_FILE="/etc/sudoers.d/clashctl"
 cp "$INSTALL_DIR/config/sudoers-clashctl" "$SUDOERS_FILE"
 chmod 440 "$SUDOERS_FILE"
-info "sudoers configured (passwordless mihomo restart)"
+log_info "sudoers configured (passwordless mihomo restart)"
 
 # ==================== 5. nftables Transparent Proxy Rules ====================
 step 5 "Configuring nftables transparent proxy"
@@ -169,7 +195,7 @@ chmod +x "$NFT_SCRIPT"
 
 # Load nftables rules
 bash "$NFT_SCRIPT"
-info "nftables rules loaded"
+log_info "nftables rules loaded"
 
 # qubes-firewall-user-script — auto-reload nftables when VMs connect
 FW_SCRIPT="/rw/config/qubes-firewall-user-script"
@@ -179,7 +205,7 @@ cat > "$FW_SCRIPT" << 'FWEOF'
 /rw/config/clash/nftables-proxy.sh
 FWEOF
 chmod +x "$FW_SCRIPT"
-info "qubes-firewall-user-script configured"
+log_info "qubes-firewall-user-script configured"
 
 # systemd path unit — monitor new vif interfaces and auto-reload
 cat > /etc/systemd/system/qcg-vif-monitor.service << 'SVCEOF'
@@ -206,7 +232,7 @@ PATHEOF
 
 systemctl daemon-reload
 systemctl enable --now qcg-vif-monitor.path 2>/dev/null || true
-info "VIF monitor service started"
+log_info "VIF monitor service started"
 
 # rc.local — persistence
 RCLOCAL="/rw/config/rc.local"
@@ -278,7 +304,7 @@ done
 # === end qubes-clash-gateway ===
 RCEOF
 chmod +x "$RCLOCAL"
-info "rc.local configured (auto-restore on reboot)"
+log_info "rc.local configured (auto-restore on reboot)"
 
 # ==================== 6. Start ====================
 step 6 "Starting service"
@@ -286,9 +312,9 @@ systemctl restart mihomo 2>/dev/null || true
 sleep 2
 
 if systemctl is-active --quiet mihomo; then
-    info "mihomo is running"
+    log_info "mihomo is running"
 else
-    warn "mihomo not started (may need to configure nodes first)"
+    log_warn "mihomo not started (may need to configure nodes first)"
 fi
 
 # Done
