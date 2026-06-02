@@ -301,6 +301,16 @@ done
 for vif in /sys/class/net/vif*; do
     [ -d "$vif" ] && nft add element inet qcg_proxy vif_interfaces "{ $(basename $vif) }" 2>/dev/null
 done
+
+# Auto-add vif on VM connect (udev rule + script)
+if [ -f "$INSTALL_DIR/config/auto-add-vif.sh" ]; then
+    cp "$INSTALL_DIR/config/auto-add-vif.sh" /rw/config/clash/auto-add-vif.sh
+    chmod +x /rw/config/clash/auto-add-vif.sh
+fi
+cat > /etc/udev/rules.d/99-qcg-vif.rules << UDEV
+ACTION=="add", SUBSYSTEM=="net", NAME=="vif*", RUN+="/rw/config/clash/auto-add-vif.sh %k"
+UDEV
+udevadm control --reload-rules 2>/dev/null || true
 # === end qubes-clash-gateway ===
 RCEOF
 chmod +x "$RCLOCAL"
