@@ -242,7 +242,55 @@ mihomo's `auto-redirect` creates nftables rules that hijack ALL traffic, includi
 
 ### Qubes vif interface lifecycle
 
-When an AppVM starts, Qubes creates a `vif*` interface on the NetVM. Our `qcg-vif-monitor.path` systemd unit watches `/sys/class/net` for changes and reloads nftables rules to include new interfaces. The `qubes-firewall-user-script` also triggers a reload when VMs connect.
+When an AppVM starts, Qubes creates a `vif*` interface on the NetVM. Three
+mechanisms ensure it gets added to the nftables interception set:
+
+1. **Boot time** — `rc.local` adds all existing `vif*` interfaces
+2. **udev rule** — `99-qcg-vif.rules` triggers `auto-add-vif.sh` when a new
+   `vif*` interface appears (handles VMs starting after boot)
+3. **Manual** — `sudo bash /rw/config/clash/nftables-proxy.sh` rebuilds everything
+
+### Why auto-route: false?
+
+mihomo's TUN `auto-route: true` creates system routes that hijack ALL traffic,
+including the NetVM's own outbound connections to proxy servers. This creates a
+routing loop where mihomo can't reach its upstream nodes. Setting `auto-route:
+false` means only explicitly-configured DNS/TCP/UDP interception via nftables.
+
+### Why use proxy server IPs instead of hostnames?
+
+mihomo resolves proxy server hostnames using its own DNS (port 1053). But
+nftables redirects AppVM DNS to the same port, and mihomo's own outbound DNS
+queries can get intercepted if routing isn't perfectly isolated. Using IPs in
+the proxy config avoids this DNS resolution loop entirely.
+
+## Troubleshooting
+
+**DNS returns real IP instead of 198.18.x.x**
+→ New VM's vif interface not in nftables set. Run:
+```bash
+sudo bash /rw/config/clash/nftables-proxy.sh
+```
+
+**curl hangs / proxy connection timeout**
+→ Proxy server hostname DNS resolution failing. Check if proxy config uses
+hostnames or IPs. If hostnames, resolve them and replace with IPs:
+```bash
+python3 -c "import socket; print(socket.gethostbyname('planb.mojcn.com'))"
+```
+
+**mihomo fails to start: "proxy group: 'use' or 'proxies' missing"**
+→ No proxy nodes configured. Add a subscription:
+```bash
+clashctl /sub add <subscription-url>
+```
+
+**Kill Switch not working / traffic leaking**
+→ nftables rules not loaded. Check:
+```bash
+sudo /usr/sbin/nft list table inet qcg_proxy
+```
+If empty, reload: `sudo bash /rw/config/clash/nftables-proxy.sh`
 
 
 ## Community

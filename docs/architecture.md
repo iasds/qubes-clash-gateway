@@ -215,10 +215,19 @@ coming from AppVMs. This is critical because:
 ### VIF Interface Lifecycle
 
 When an AppVM boots, Qubes creates a new `vifX.Y` interface on the NetVM. The
-`qcg-vif-monitor.path` systemd unit watches `/sys/class/net` for changes and
-triggers a reload of the nftables script to pick up new interfaces. The
-`qubes-firewall-user-script` at `/rw/config/qubes-firewall-user-script` also
-triggers nftables reload when VMs connect.
+nftables rules reference a named set `vif_interfaces` — only interfaces in this
+set get transparent proxy interception.
+
+Three mechanisms ensure new interfaces are added:
+
+1. **Boot time** (`rc.local`): iterates `/sys/class/net/vif*` and adds all
+   existing interfaces to the set
+2. **udev rule** (`99-qcg-vif.rules`): triggers `auto-add-vif.sh` when a new
+   `vif*` interface appears, adding it to the set immediately
+3. **Manual reload**: `sudo bash /rw/config/clash/nftables-proxy.sh` rebuilds
+   the entire table from scratch
+
+The udev rule is recreated by `rc.local` on every boot (Qubes resets `/etc/`).
 
 ## Persistence Model
 
@@ -245,6 +254,7 @@ is reset on every reboot. Only `/rw/config/` persists across restarts.
 |------|---------------|
 | `/usr/local/bin/mihomo` | Binary installed once to the template (or to `/rw/config/`) |
 | `/etc/systemd/system/mihomo.service` | Recreated by `rc.local` on every boot |
+| `/etc/udev/rules.d/99-qcg-vif.rules` | Recreated by `rc.local` on every boot |
 
 ### Boot Sequence
 
